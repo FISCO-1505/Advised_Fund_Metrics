@@ -6,4 +6,4 @@ cryptography==41.0.7
 matplotlib==3.8.2
 openpyxl==3.1.2
 # FISCO_Sources @ git+https://${GITHUB_TOKEN}@github.com/FISCO-1505/Finaccess_Resources.git     #para instalar de forma local
-git+https://${GITHUB_TOKEN}@github.com/FISCO-1505/Finaccess_Resources.git
+git+https://${STREAMLIT_CLOUD_TOKEN}@github.com/FISCO-1505/Finaccess_Resources.git
