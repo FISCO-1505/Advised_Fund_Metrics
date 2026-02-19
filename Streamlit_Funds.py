@@ -1,18 +1,31 @@
-import os
+import streamlit as st
 import subprocess
 import sys
+import os
 
-token = os.environ.get("STREAMLIT_CLOUD_TOKEN")
-
-if token:
-
-    repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git#subdirectory=src"
-    
+# Función para instalar solo si es necesario
+def install_private_library():
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", repo_url])
-        print("✅ Librería FISCO_Sources instalada correctamente")
-    except Exception as e:
-        print(f"❌ Error crítico en instalación: {e}")
+        # Intentamos importar la librería
+        import FISCO_Sources
+        # Si llega aquí, es que ya está instalada, no hacemos nada
+    except ImportError:
+        # Si no existe, la instalamos
+        if "STREAMLIT_CLOUD_TOKEN" in st.secrets:
+            token = st.secrets["STREAMLIT_CLOUD_TOKEN"]
+            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git#subdirectory=src"
+            
+            # Usamos una notificación temporal en la UI para saber qué pasa
+            with st.spinner('Instalando recursos internos...'):
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", repo_url])
+                # Forzar recarga de módulos
+                import site
+                from importlib import reload
+                reload(site)
+            st.rerun() # Reiniciamos una sola vez para cargar el nuevo módulo
+
+# Ejecutamos la función al inicio
+install_private_library()
 
 
 import pandas as pd
@@ -20,7 +33,6 @@ import numpy as np
 import warnings
 from datetime import datetime
 import calendar
-import streamlit as st
 from pathlib import Path
 
 import Kit_Funciones as kit_funciones
