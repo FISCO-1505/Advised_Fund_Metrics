@@ -5,16 +5,15 @@ import os
 import shutil
 
 def install_private_library():
-    # Creamos una carpeta dentro de tu repo para la librería
-    # /mount/src/advised_fund_metrics/lib_interna
+   
     local_lib_path = os.path.join(os.getcwd(), "lib_interna")
     
-    # Añadimos esa carpeta al buscador de Python (esto es clave)
+    
     if local_lib_path not in sys.path:
         sys.path.insert(0, local_lib_path)
 
     try:
-        # Intentamos importar
+        
         from FISCO_Sources import auth, crypto
     except ImportError:
         if "STREAMLIT_CLOUD_TOKEN" in st.secrets:
@@ -22,12 +21,15 @@ def install_private_library():
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
             with st.spinner('Cargando recursos de seguridad...'):
-                # Instalamos usando --target para forzar que se guarde en nuestra carpeta
+            
                 subprocess.check_call([
                     sys.executable, "-m", "pip", 
-                    "install", "--target", local_lib_path, repo_url
+                    "install", 
+                    "--target", local_lib_path, 
+                    "--no-deps",  
+                    repo_url
                 ])
-                # Refrescamos para que Python vea los nuevos archivos
+             
                 st.rerun()
         else:
             st.error("No se encontró el token de acceso en los Secrets.")
