@@ -6,7 +6,7 @@ token = os.environ.get("STREAMLIT_CLOUD_TOKEN")
 
 if token:
 
-    repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
+    repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git#subdirectory=src"
     
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", repo_url])
