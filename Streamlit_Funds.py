@@ -1,33 +1,39 @@
 import streamlit as st
 import subprocess
 import sys
+import os
+import shutil
 
 def install_private_library():
+    # Creamos una carpeta dentro de tu repo para la librería
+    # /mount/src/advised_fund_metrics/lib_interna
+    local_lib_path = os.path.join(os.getcwd(), "lib_interna")
+    
+    # Añadimos esa carpeta al buscador de Python (esto es clave)
+    if local_lib_path not in sys.path:
+        sys.path.insert(0, local_lib_path)
+
     try:
-        import FISCO_Sources
+        # Intentamos importar
+        from FISCO_Sources import auth, crypto
     except ImportError:
         if "STREAMLIT_CLOUD_TOKEN" in st.secrets:
             token = st.secrets["STREAMLIT_CLOUD_TOKEN"]
-            # NOTA: Sin el #subdirectory porque ya está en tu pyproject.toml
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
-            # Ejecutamos y capturamos todo el error
-            # Intenta con la opción --user primero
-            process = subprocess.Popen(
-                [sys.executable, "-m", "pip", "install", "--user", repo_url],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = process.communicate()
-
-            if process.returncode != 0:
-                st.error("Fallo la instalación de la librería privada")
-                st.code(stderr) # Esto te mostrará el log real de error de PIP
-                st.stop() # Detenemos la ejecución para que leas el error
-            else:
+            with st.spinner('Cargando recursos de seguridad...'):
+                # Instalamos usando --target para forzar que se guarde en nuestra carpeta
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", 
+                    "install", "--target", local_lib_path, repo_url
+                ])
+                # Refrescamos para que Python vea los nuevos archivos
                 st.rerun()
+        else:
+            st.error("No se encontró el token de acceso en los Secrets.")
+            st.stop()
 
+# Ejecutar la función
 install_private_library()
 
 
