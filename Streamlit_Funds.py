@@ -9,6 +9,7 @@ from pathlib import Path
 import Kit_Funciones as kit_funciones
 import Kit_Metricas as kit_metrics
 from cryptography.fernet import Fernet
+from FISCO_Sources import auth, crypto
 
 #display options
 warnings.filterwarnings('ignore')
@@ -20,9 +21,6 @@ pd.set_option('display.max_columns', None)
         # st.image(image)
 
 
-
-#lectura de datos (se debe de cambiar por el archivo a subir)
-# data=pd.read_excel('Funds_aut.xlsx',sheet_name=None)
 
 
 
@@ -38,34 +36,45 @@ def main():
     #                    page_title = "Rendimientos México")
     
     # Cargar clave y crear instancia de Fernet
-    clave = kit_funciones.cargar_clave()
-    fernet = Fernet(clave)
+    # clave = kit_funciones.cargar_clave()
+    # fernet = Fernet(clave)
     
-    pswd_ok = kit_funciones.desencriptar_con_manejo_errores(st.secrets["PSW_STREAMLIT"], fernet)
-    @st.dialog("Validación de acceso")
-    def validar_contrasena():
-        with st.form("validar_pswd", enter_to_submit=True):
-            #se solicta la pswd
-            password = st.text_input("Ingresa tu acceso", type="password")
+    # pswd_ok = kit_funciones.desencriptar_con_manejo_errores(st.secrets["PSW_STREAMLIT"], fernet)
+    # @st.dialog("Validación de acceso")
+    # def validar_contrasena():
+    #     with st.form("validar_pswd", enter_to_submit=True):
+    #         #se solicta la pswd
+    #         password = st.text_input("Ingresa tu acceso", type="password")
         
-            if st.form_submit_button("Confirmar"):
-                if password == pswd_ok:
-                    #se crea una sesion
-                    st.session_state["pswd"] = True
-                    #cerrar el dialogo
-                    st.rerun()
-                else:
-                    st.error("Validación incorrecta", icon=':material/error:')
+    #         if st.form_submit_button("Confirmar"):
+    #             if password == pswd_ok:
+    #                 #se crea una sesion
+    #                 st.session_state["pswd"] = True
+    #                 #cerrar el dialogo
+    #                 st.rerun()
+    #             else:
+    #                 st.error("Validación incorrecta", icon=':material/error:')
         
-    # Usa Session State para controlar la visibilidad del dialogo y el acceso
-    if "pswd" not in st.session_state:
-        st.session_state["pswd"] = False
+    # # Usa Session State para controlar la visibilidad del dialogo y el acceso
+    # if "pswd" not in st.session_state:
+    #     st.session_state["pswd"] = False
         
-    if not st.session_state["pswd"]:
-        with st.sidebar:
-            # Si la contraseña no se ha validado, muestra un botón para abrir el diálogo
-            if st.button("Validar", icon=":material/lock_person:"):
-                validar_contrasena()
+    # if not st.session_state["pswd"]:
+    #     with st.sidebar:
+    #         # Si la contraseña no se ha validado, muestra un botón para abrir el diálogo
+    #         if st.button("Validar", icon=":material/lock_person:"):
+    #             validar_contrasena()
+
+
+    # 2. Llamada a tu librería para validar acceso
+    # Pasamos el secreto y el kit de funciones como argumento
+    acceso_concedido = auth.verificar_acceso(st.secrets["PSW_STREAMLIT"], crypto)
+
+    if not acceso_concedido:
+        # Aquí puedes poner un mensaje opcional o dejarlo en blanco
+        st.info("Por favor, inicia sesión en el menú lateral para continuar.")
+
+
     else:
         data = None
         # ______________________________________ Contenido Principal ______________________________________
