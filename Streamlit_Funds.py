@@ -79,7 +79,7 @@ def main():
         data = None
         # ______________________________________ Contenido Principal ______________________________________
         with st.sidebar:
-            st.success("¡Acceso concedido!", icon=":material/lock_open:")            
+            st.success("¡Acceso concedidoooooooooooooo!", icon=":material/lock_open:")            
         
             #cargar archivo
             archivo_subido = st.file_uploader("Sube tu Excel", type=["xlsx","xls"])
