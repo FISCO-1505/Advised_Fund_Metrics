@@ -1,30 +1,32 @@
 import streamlit as st
 import subprocess
 import sys
-import os
 
-# Función para instalar solo si es necesario
 def install_private_library():
     try:
-        # Intentamos importar la librería
         import FISCO_Sources
-        # Si llega aquí, es que ya está instalada, no hacemos nada
     except ImportError:
-        # Si no existe, la instalamos
         if "STREAMLIT_CLOUD_TOKEN" in st.secrets:
             token = st.secrets["STREAMLIT_CLOUD_TOKEN"]
-            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git#subdirectory=src"
+            # NOTA: Sin el #subdirectory porque ya está en tu pyproject.toml
+            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
-            # Usamos una notificación temporal en la UI para saber qué pasa
-            with st.spinner('Instalando recursos internos...'):
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "--quiet", repo_url])
-                # Forzar recarga de módulos
-                import site
-                from importlib import reload
-                reload(site)
-            st.rerun() # Reiniciamos una sola vez para cargar el nuevo módulo
+            # Ejecutamos y capturamos TODO el error
+            process = subprocess.Popen(
+                [sys.executable, "-m", "pip", "install", repo_url],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = process.communicate()
 
-# Ejecutamos la función al inicio
+            if process.returncode != 0:
+                st.error("Fallo la instalación de la librería privada")
+                st.code(stderr) # Esto te mostrará el log real de error de PIP
+                st.stop() # Detenemos la ejecución para que leas el error
+            else:
+                st.rerun()
+
 install_private_library()
 
 
