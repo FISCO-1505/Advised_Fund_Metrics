@@ -1,3 +1,20 @@
+import os
+import subprocess
+import sys
+
+token = os.environ.get("STREAMLIT_CLOUD_TOKEN")
+
+if token:
+
+    repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
+    
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", repo_url])
+        print("✅ Librería FISCO_Sources instalada correctamente")
+    except Exception as e:
+        print(f"❌ Error crítico en instalación: {e}")
+
+
 import pandas as pd
 import numpy as np
 import warnings
