@@ -11,9 +11,10 @@ def install_private_library():
             # NOTA: Sin el #subdirectory porque ya está en tu pyproject.toml
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
-            # Ejecutamos y capturamos TODO el error
+            # Ejecutamos y capturamos todo el error
+            # Intenta con la opción --user primero
             process = subprocess.Popen(
-                [sys.executable, "-m", "pip", "install", repo_url],
+                [sys.executable, "-m", "pip", "install", "--user", repo_url],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
