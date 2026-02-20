@@ -3,30 +3,43 @@ import subprocess
 import sys
 import os
 
-def install_private_library():
-    pkg_name = "FISCO_Sources"
+def ensure_private_lib():
+    # 1. Definimos una ruta local con permisos de escritura
+    local_lib_path = os.path.join(os.getcwd(), "vendor")
     
     try:
-        __import__(pkg_name)
+        # Intentamos importar
+        from FISCO_Sources import auth
     except ImportError:
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
+            
+            # Aseguramos que la carpeta exista
+            if not os.path.exists(local_lib_path):
+                os.makedirs(local_lib_path)
+            
+            try:
 
-            with st.spinner('Instalando componentes de seguridad privados...'):
-                try:
-                    subprocess.check_call([sys.executable, "-m", "pip", "install", repo_url])
-                    st.success("Instalación exitosa.")
-                    os.execv(sys.executable, ['python'] + sys.argv)
-                except Exception as e:
-                    st.error(f"Error crítico de instalación: {e}")
-                    st.stop()
+                subprocess.check_call([
+                    sys.executable, "-m", "pip", 
+                    "install", "--target", local_lib_path, 
+                    repo_url
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                if local_lib_path not in sys.path:
+                    sys.path.insert(0, local_lib_path)
+                
+                st.success("Configuración de seguridad completada.")
+            except Exception:
+                st.error("Error de configuración: No se pudo acceder a los recursos privados.")
+                st.stop()
         else:
-            st.error("No se encontró GITHUB_TOKEN en los Secrets de Streamlit.")
+            st.error("Credenciales no encontradas.")
             st.stop()
 
-# Ejecutar la validación
-install_private_library()
+# Ejecutar antes de cualquier import de tu librería
+ensure_private_lib()
 
 import pandas as pd
 import numpy as np
