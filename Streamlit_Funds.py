@@ -1,3 +1,33 @@
+import streamlit as st
+import subprocess
+import sys
+import os
+
+def install_private_library():
+    pkg_name = "FISCO_Sources"
+    
+    try:
+        __import__(pkg_name)
+    except ImportError:
+        if "GITHUB_TOKEN" in st.secrets:
+            token = st.secrets["GITHUB_TOKEN"]
+            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
+
+            with st.spinner('Instalando componentes de seguridad privados...'):
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", repo_url])
+                    st.success("Instalación exitosa.")
+                    os.execv(sys.executable, ['python'] + sys.argv)
+                except Exception as e:
+                    st.error(f"Error crítico de instalación: {e}")
+                    st.stop()
+        else:
+            st.error("No se encontró GITHUB_TOKEN en los Secrets de Streamlit.")
+            st.stop()
+
+# Ejecutar la validación
+install_private_library()
+
 import pandas as pd
 import numpy as np
 import warnings
