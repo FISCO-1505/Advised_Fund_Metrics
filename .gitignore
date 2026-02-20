@@ -13,6 +13,9 @@ ENV/
 env.bak/
 venv.bak/
 
+#carpeta para streamlit cloud para clonar la librería externa
+vendor/
+
 # streamlit screts
 .streamlit
 

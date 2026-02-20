@@ -4,42 +4,93 @@ import sys
 import os
 
 def ensure_private_lib():
-    # 1. Definimos una ruta local con permisos de escritura
-    local_lib_path = os.path.join(os.getcwd(), "vendor")
-    
+    # DETECCIÓN AUTOMÁTICA DE ENTORNO
+    # Streamlit Cloud siempre define 'STREAMLIT_RUNTIME_IS_CO_PILOT_RESIDENT' o 'HOME' como /home/adminuser
+    is_cloud = os.environ.get("STREAMLIT_RUNTIME_IS_CO_PILOT_RESIDENT") or os.path.exists("/home/adminuser")
+
+    if is_cloud:
+        # Ruta en la Nube (Segura y fuera del repo)
+        local_lib_path = "/tmp/fisco_vendor"
+    else:
+        # Ruta Local (Para que lo veas en tu carpeta vendor)
+        local_lib_path = os.path.join(os.getcwd(), "vendor")
+
+    # Aseguramos que la ruta esté en el path de Python antes de intentar el import
+    if local_lib_path not in sys.path:
+        sys.path.insert(0, local_lib_path)
+
     try:
-        # Intentamos importar
-        from FISCO_Sources import auth
+        # Intentamos importar la librería
+        import FISCO_Sources
     except ImportError:
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
-            # Aseguramos que la carpeta exista
             if not os.path.exists(local_lib_path):
                 os.makedirs(local_lib_path)
             
             try:
-
+                # Instalación silenciosa
                 subprocess.check_call([
                     sys.executable, "-m", "pip", 
                     "install", "--target", local_lib_path, 
                     repo_url
                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-                if local_lib_path not in sys.path:
-                    sys.path.insert(0, local_lib_path)
                 
-                st.success("Configuración de seguridad completada.")
+                # Forzamos refresco de módulos instalados
+                st.rerun() 
             except Exception:
-                st.error("Error de configuración: No se pudo acceder a los recursos privados.")
+                st.error("Error crítico: No se pudo configurar el entorno de seguridad.")
                 st.stop()
         else:
-            st.error("Credenciales no encontradas.")
+            st.error("Credenciales GITHUB_TOKEN no encontradas en Secrets.")
             st.stop()
 
-# Ejecutar antes de cualquier import de tu librería
+# Ejecutar la función
 ensure_private_lib()
+
+
+# import streamlit as st
+# import subprocess
+# import sys
+# import os
+
+# def ensure_private_lib():
+#     # Definimos una ruta local con permisos de escritura
+#     local_lib_path = os.path.join(os.getcwd(), "vendor")
+    
+#     try:
+#         # Intentamos importar
+#         from FISCO_Sources import auth
+#     except ImportError:
+#         if "GITHUB_TOKEN" in st.secrets:
+#             token = st.secrets["GITHUB_TOKEN"]
+#             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
+            
+#             # Aseguramos que la carpeta exista
+#             if not os.path.exists(local_lib_path):
+#                 os.makedirs(local_lib_path)
+#             try:
+#                 subprocess.check_call([
+#                     sys.executable, "-m", "pip", 
+#                     "install", "--target", local_lib_path, 
+#                     repo_url
+#                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+#                 if local_lib_path not in sys.path:
+#                     sys.path.insert(0, local_lib_path)
+                
+#                 st.success("Configuración de seguridad completada.")
+#             except Exception:
+#                 st.error("Error de configuración: No se pudo acceder a los recursos privados.")
+#                 st.stop()
+#         else:
+#             st.error("Credenciales no encontradas.")
+#             st.stop()
+
+# ensure_private_lib()
+
 
 import pandas as pd
 import numpy as np
@@ -51,20 +102,15 @@ from pathlib import Path
 import Kit_Funciones as kit_funciones
 import Kit_Metricas as kit_metrics
 from cryptography.fernet import Fernet
-from FISCO_Sources import auth, crypto
+from FISCO_Sources import auth, crypto, images
 
 #display options
 warnings.filterwarnings('ignore')
 pd.set_option('display.float_format', lambda x: '{:.6f}'.format(x))
 pd.set_option('display.max_columns', None)
 
-# Insertar logo finaccess
-        # image = Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_azul.png"))
-        # st.image(image)
 
-
-
-
+images.imagen_f("Advised Funds Metrics")
 
 #%%
 def main():
@@ -73,39 +119,8 @@ def main():
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
     
-    # # Configuración de la página
-    # st.set_page_config(page_icon=Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_f.png")),
-    #                    page_title = "Rendimientos México")
+
     
-    # Cargar clave y crear instancia de Fernet
-    # clave = kit_funciones.cargar_clave()
-    # fernet = Fernet(clave)
-    
-    # pswd_ok = kit_funciones.desencriptar_con_manejo_errores(st.secrets["PSW_STREAMLIT"], fernet)
-    # @st.dialog("Validación de acceso")
-    # def validar_contrasena():
-    #     with st.form("validar_pswd", enter_to_submit=True):
-    #         #se solicta la pswd
-    #         password = st.text_input("Ingresa tu acceso", type="password")
-        
-    #         if st.form_submit_button("Confirmar"):
-    #             if password == pswd_ok:
-    #                 #se crea una sesion
-    #                 st.session_state["pswd"] = True
-    #                 #cerrar el dialogo
-    #                 st.rerun()
-    #             else:
-    #                 st.error("Validación incorrecta", icon=':material/error:')
-        
-    # # Usa Session State para controlar la visibilidad del dialogo y el acceso
-    # if "pswd" not in st.session_state:
-    #     st.session_state["pswd"] = False
-        
-    # if not st.session_state["pswd"]:
-    #     with st.sidebar:
-    #         # Si la contraseña no se ha validado, muestra un botón para abrir el diálogo
-    #         if st.button("Validar", icon=":material/lock_person:"):
-    #             validar_contrasena()
 
 
     # 2. Llamada a tu librería para validar acceso
@@ -120,6 +135,11 @@ def main():
     else:
         data = None
         # ______________________________________ Contenido Principal ______________________________________
+        
+        # Insertar logo finaccess
+        # image = Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_azul.png"))
+        # st.image(image)
+        
         with st.sidebar:
             st.success("¡Acceso concedidoooooooooooooo!", icon=":material/lock_open:")            
         
@@ -144,6 +164,9 @@ def main():
         # Ejecutar opción seleccionada
         if selection != "Home":
             if data is not None:
+
+                images.imagen_f_azul()
+
                 if selection == "1Y":
                     # rendimientos()
                     st.header("Tablas de 1Y")
@@ -195,7 +218,14 @@ def main():
             else:
                 st.info("⚠️ Para visualizar esta sección, primero carga el archivo Excel en el menú lateral.")
         else:
-            st.info("Bienvenido. Por favor sube un archivo para comenzar el análisis. Pondremos la imagen")
+
+            st.title("Página de Inicio", text_alignment="center")
+
+            #llamado de la imagen de inicio
+            images.imagen_home()
+
+            st.info("Bienvenido. Por favor sube un archivo para comenzar el análisis.")
+
 
         #____________________________________ Cerrar Sesión ____________________________________
         if st.sidebar.button("Cerrar sesión"):
