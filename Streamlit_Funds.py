@@ -4,7 +4,6 @@ import sys
 import os
 
 def ensure_private_lib():
-    # 1. IDENTIFICACIÓN DEL ENTORNO Y RUTA
     # Si existe /home/adminuser, estamos en Streamlit Cloud
     is_cloud = os.path.exists("/home/adminuser")
     
@@ -15,7 +14,7 @@ def ensure_private_lib():
         # En local usamos la carpeta vendor en el directorio actual
         local_lib_path = os.path.join(os.getcwd(), "vendor")
 
-    # 2. ASEGURAR QUE LA RUTA EXISTE Y ESTÁ EN EL PATH
+    # Asgurar que la ruta exista
     if not os.path.exists(local_lib_path):
         os.makedirs(local_lib_path)
     
@@ -23,30 +22,25 @@ def ensure_private_lib():
         # Insertamos al inicio para dar prioridad a nuestra librería
         sys.path.insert(0, local_lib_path)
 
-    # 3. INTENTO DE IMPORTACIÓN
     try:
         import FISCO_Sources
-        # Si llega aquí, ya está instalada y funcionando
     except ImportError:
-        # 4. INSTALACIÓN SI NO EXISTE
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
             
-            with st.spinner("Configurando recursos de seguridad..."):
+            with st.spinner("Configurando recursos..."):
                 try:
                     subprocess.check_call([
                         sys.executable, "-m", "pip", 
                         "install", "--target", local_lib_path, 
                         repo_url
                     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    
-                    # En lugar de st.rerun(), intentamos forzar la carga del módulo
+
                     st.success("Recursos configurados correctamente.")
-                    # Es necesario importar después de la instalación
                     import FISCO_Sources
                 except Exception as e:
-                    st.error(f"Error crítico: No se pudo instalar la librería. {e}")
+                    st.error(f"Error crítico: No se pudo instalar la librería.")
                     st.stop()
         else:
             st.error("No se encontró GITHUB_TOKEN en los Secrets de Streamlit.")
@@ -54,48 +48,6 @@ def ensure_private_lib():
 
 # Ejecutar la función
 ensure_private_lib()
-
-
-# import streamlit as st
-# import subprocess
-# import sys
-# import os
-
-# def ensure_private_lib():
-#     # Definimos una ruta local con permisos de escritura
-#     local_lib_path = os.path.join(os.getcwd(), "vendor")
-    
-#     try:
-#         # Intentamos importar
-#         from FISCO_Sources import auth
-#     except ImportError:
-#         if "GITHUB_TOKEN" in st.secrets:
-#             token = st.secrets["GITHUB_TOKEN"]
-#             repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git"
-            
-#             # Aseguramos que la carpeta exista
-#             if not os.path.exists(local_lib_path):
-#                 os.makedirs(local_lib_path)
-#             try:
-#                 subprocess.check_call([
-#                     sys.executable, "-m", "pip", 
-#                     "install", "--target", local_lib_path, 
-#                     repo_url
-#                 ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-#                 if local_lib_path not in sys.path:
-#                     sys.path.insert(0, local_lib_path)
-                
-#                 st.success("Configuración de seguridad completada.")
-#             except Exception:
-#                 st.error("Error de configuración: No se pudo acceder a los recursos privados.")
-#                 st.stop()
-#         else:
-#             st.error("Credenciales no encontradas.")
-#             st.stop()
-
-# ensure_private_lib()
-
 
 import pandas as pd
 import numpy as np
@@ -123,13 +75,8 @@ def main():
     # Obtener ruta del archivo
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
-    
 
-    print(ruta_base)
-
-
-    # 2. Llamada a tu librería para validar acceso
-    # Pasamos el secreto y el kit de funciones como argumento
+    # Llamada a tu librería para validar acceso
     acceso_concedido = auth.verificar_acceso(st.secrets["PSW_STREAMLIT"], crypto)
 
     if not acceso_concedido:
@@ -140,10 +87,6 @@ def main():
     else:
         data = None
         # ______________________________________ Contenido Principal ______________________________________
-        
-        # Insertar logo finaccess
-        # image = Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_azul.png"))
-        # st.image(image)
         
         with st.sidebar:
             st.success("¡Acceso concedidoooooooooooooo!", icon=":material/lock_open:")            
@@ -227,9 +170,9 @@ def main():
             st.title("Página de Inicio", text_alignment="center")
 
             #llamado de la imagen de inicio
-            images.imagen_home()
+            images.imagen_home("Advisors")
 
-            st.info("Bienvenido. Por favor sube un archivo para comenzar el análisis.")
+            # st.info("Bienvenido. Por favor sube un archivo para comenzar el análisis.")
 
 
         #____________________________________ Cerrar Sesión ____________________________________
