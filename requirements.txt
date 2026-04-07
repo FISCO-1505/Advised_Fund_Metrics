@@ -6,3 +6,5 @@ cryptography==41.0.7
 matplotlib==3.8.2
 openpyxl==3.1.2
 plotly==5.20.0
+xlsxwriter==3.1.9
+matplotlib==3.8.2
