@@ -2,8 +2,16 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 import matplotlib.pyplot as plt
-# import plotly.graph_objects as go
 import io
+
+# librerias para el gráfico
+import matplotlib.dates as mdates
+import numpy as np
+import matplotlib.ticker as mtick
+from scipy.interpolate import make_interp_spline
+
+import warnings
+warnings.filterwarnings('ignore')
 
 @st.cache_data(show_spinner=False)
 def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03'):
@@ -39,60 +47,64 @@ def cargar_datos_excel(_file):
     dict_dfs = pd.read_excel(_file, sheet_name=None)
     
     for sheet in dict_dfs:
-        dict_dfs[sheet] = dict_dfs[sheet].applymap(
+        dict_dfs[sheet] = dict_dfs[sheet].map(
             lambda x: str(x) if isinstance(x, list) else x
         )
     return dict_dfs
 
-#modificar los assets para que en returns table solo salga los ports 6,7,8
-#_______
 def assets_filter(topic, _data):
-    '''
-    topic: nombre del apartado principal para obtener el los fondos/portafolios
-    funds_list: lista de los fondos/portafolios filtrados
-    '''
 
-    assets=[]
-    assets_selected=[]
-
-    if topic == "Funds":
-        name = "Assets"
-
-    elif topic == "Portfolio":
-        name = "Portfolio"
-
-    elif topic == "Returns Table":
-        name = "Returns Table"
-    
-    
-    pills=st.pills(label="Options for funds", label_visibility="collapsed",
-                                 options=[f"Custom {name}",f"All {name}", f"Manager {name}"],
-                                 default=f"Custom {name}")
-
-    #filtrar el DataFrame según el tipo
-    if topic == "Funds":
-        df_filtered = _data[(_data["Type"]=="Fund") | (_data['Type']=='Commodity')]
-    elif topic in ["Portfolio", "Returns Table"]:
-        df_filtered = _data[_data["Type"]=="Portfolio"]
+    if topic == "Returns Table":
+        name = "Returns"
+        # Para Returns Table solo mostramos Custom y All
+        pills_options = [f"Custom {name}", f"All {name}"]
     else:
-        df_filtered = _data.head(0)
+        name = "Assets" if topic == "Funds" else "Portfolio"
+        # Para los demás mostramos las 3 opciones
+        pills_options = [f"Custom {name}", f"All {name}", f"Manager {name}"]
 
-    # mapeo: { 'Nombre Corto': 'Ticker' }
-    mapping = dict(zip(df_filtered["Short Name"], df_filtered["Ticker"]))
+    # Pills
+    pills = st.pills(
+        label="Options", 
+        label_visibility="collapsed",
+        options=pills_options,
+        default=pills_options[0],
+        key=f"pills_{topic}" # Añadimos key única por seguridad
+    )
+
+    #Filtrado del DataFrame según el tipo de activo
+    if topic == "Funds":
+        df_filtered = _data[(_data["Type"] == "Fund") | (_data['Type'] == 'Commodity')]
+    elif topic == "Portfolio":
+        df_filtered = _data[_data["Type"] == "Portfolio"]
+    elif topic == "Returns Table":
+        df_filtered = _data[(_data["Type"] == "Portfolio") & (_data['Ticker'].isin(["Port 6 (Conservative)","Port 7", "Port 8 (BALANCED GROWTH)"]))]
+        
     
-    # Lista de Nombres Cortos para mostrar en el Multiselect
+    # Mapeo y lista de nombres
+    mapping = dict(zip(df_filtered["Short Name"], df_filtered["Ticker"]))
     assets_names = df_filtered["Short Name"].tolist()
     
-    #list manager para los fondos
-    list_mngr_fnds=["Nabucco", "Turandot", "Rothschild Wealth Strategy", "BBVA Strategic Equity",
-                    "BBVA Absolute Global Trends", "MS Risk Control", "MS Growth"]
+    #lista para los fondos y creación de los reportes
+    list_mngr_fnds = [
+        "Nabucco", "Turandot", "Rothschild Wealth Strategy", "BBVA Strategic Equity",
+        "BBVA Absolute Global Trends", "MS Risk Control", "MS Growth"
+    ]
     
+    assets_selected = []
+
     if pills == f"Custom {name}":
-        assets_selected = None
+        assets_selected = []
+    
     elif pills == f"All {name}":
         assets_selected = assets_names
+        
     elif pills == f"Manager {name}":
-        assets_selected = list_mngr_fnds if (topic != "Returns Table" and topic!= "Portfolio") else assets_names[:2]
+        #esta condicional no considera a Returns Table
+        if topic == "Funds":
+            assets_selected = list_mngr_fnds
+        else:
+            assets_selected = assets_names[:2]
 
     return assets_names, assets_selected, mapping
 
@@ -216,6 +228,7 @@ def calendar(df, mode):
         
         return str(selected_date)
 
+@st.cache_data(show_spinner=False)
 def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity, key_suffix=""):
     """
      Función auxiliar para generar gráficos de barras para métricas
@@ -278,7 +291,7 @@ def calculus_bmrk(_data):
         
         # Retornos de componentes sin fillna (mantener NaNs originales)
         comp_tickers = w_pivot.columns
-        comp_returns = df_prices[comp_tickers].pct_change() 
+        comp_returns = df_prices[comp_tickers].ffill().pct_change() 
         
         # Cálculo del Benchmark:
         dict_bmks_returns[bmk_name] = (comp_returns * w_aligned).sum(axis=1, min_count=1)
@@ -392,63 +405,124 @@ def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
     
     return df_final_px
 
-def grafico_tablas_rend(allocation):
-# Crear la figura
-    fig, ax = plt.subplots(figsize=(6, 4))
+def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
+    plt.switch_backend('Agg')
+    fig, ax = plt.subplots(figsize=(12, 4))
+
+    def suavizar_datos(df):
+        x = mdates.date2num(df.index)
+        y = df.values*100
+        x_new = np.linspace(x.min(), x.max(), 300) 
+        spl = make_interp_spline(x, y, k=3)
+        y_smooth = spl(x_new)
+        return x_new, y_smooth
+
+    # 1. Graficar datos suavizados
+    x_p, y_p = suavizar_datos(df_port)
+    ax.plot(x_p, y_p, color='#203764', label='Portfolio', linewidth=2.2, antialiased=True, zorder=3)
     
-    # Filtrar datos (asumiendo que allocation es un DataFrame de una fila)
-    data_to_plot = allocation.iloc[0]
+    if df_bmrk is not None:
+        x_b, y_b = suavizar_datos(df_bmrk)
+        ax.plot(x_b, y_b, color='#D3D3D3', label='Benchmark', linewidth=1.5, alpha=0.8, zorder=2)
+
+    # 2. Resaltar el eje 0 (Línea de base)
+    ax.axhline(0, color='#808080', linewidth=1.2, zorder=1) # Gris medio
+
+    # 3. Formato del Eje Y (Porcentaje con 1 decimal)
+    # Si tus datos ya están en formato 10.5 (para 10.5%), usa esto:
+    ax.yaxis.set_major_formatter(mtick.FormatStrFormatter('%.1f%%'))
+    # Si tus datos están en 0.105 para 10.5%, usa: mtick.PercentFormatter(1.0, decimals=1)
+
+    # 4. Formato del Eje X (Fechas con inclinación y más frecuencia)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
+    # Forzamos a que aparezcan más etiquetas (ej. cada 7 días o ajuste automático más denso)
+    # ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=12)) 
+
+    # Configuramos el localizador para que sea cada 2 días
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     
-    # Crear gráfico de barras
-    data_to_plot.plot(kind='barh', ax=ax, color='#203764')
+    # Inclinación ligera de las fechas
+    plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
+
+    # 5. Colores de los ejes y etiquetas en Gris
+    color_gris = '#666666'
+    ax.tick_params(axis='both', colors=color_gris, labelsize=9) # Números en gris
+    ax.spines['bottom'].set_color(color_gris) # Línea del eje X en gris
+    ax.spines['left'].set_color(color_gris)   # Línea del eje Y en gris
+
+    # Estética final
+    ax.set_title(f"Performance: {nombre_port}", fontsize=11, fontweight='bold', color='#333333', pad=15)
+    ax.legend(loc='upper left', frameon=False, fontsize=9)
     
-    ax.set_title("Distribución del Portafolio", fontsize=12, fontweight='bold', family='sans-serif')
-    ax.set_xlabel("Porcentaje (%)")
+    # Quitar marcos innecesarios
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(axis='y', linestyle='--', alpha=0.2, color=color_gris)
+
     plt.tight_layout()
 
-    # Guardar en un buffer
+    # Guardar en buffer
     imgdata = io.BytesIO()
-    fig.savefig(imgdata, format='png', dpi=100)
-    plt.close(fig) # Importante cerrar la figura para no consumir RAM
+    fig.savefig(imgdata, format='png', dpi=130, bbox_inches='tight') # bbox_inches evita que se corten las fechas inclinadas
+    plt.close(fig)
+    imgdata.seek(0)
+    
     return imgdata
 
 @st.cache_data
 def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
-                allocation,port,prices):
+                allocation,port,prices,img_buffer,
+                df_ocw,df_dfaf,start_dt_ocw,start_dt_dfaf):
     
     output = io.BytesIO()
     
-    # Crear gráfico
-    # grafico_img = grafico_tablas_rend(allocation)
+    if port[5:6] == "6":
+        titulo = "PORTAFOLIO CONSERVADOR"
+        subtitulo = "(Port-6)"
+        tipo_sub = "Conservador"
+    elif port[5:6] == "7":
+        titulo = "PORTAFOLIO BALANCEADO"
+        subtitulo = "(Port-7)"
+        tipo_sub = "Balanceado"
+    elif port[5:6] == "8":
+        titulo = "PORTAFOLIO CRECIMIENTO"
+        subtitulo = "BALANCEADO (Port-8)"
+        tipo_sub = "Balanceado"
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         workbook = writer.book
         worksheet = workbook.add_worksheet("Portfolio")
 
         # --- TUS FORMATOS ---
-        money = {"num_format": "_-$* #,##0.00_-", "font_name":"Lato Light", 
-                                            "align":"center", "valign":"vcenter"}
+        money = {"num_format": "_-$* #,##0.00_-", "font_name":"Lato Light", "align":"center", "valign":"vcenter"}
 
-        pct = {"num_format": '0.00%', "font_name":"Lato Light",
-                                        "align":"center", "valign":"vcenter"}
+        pct = {"num_format": '0.00%', "font_name":"Lato Light","align":"center", "valign":"vcenter"}
         
-        header = {"align":"center", "valign":"vcenter", "font_name":"Lato Light",
-                                            "font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,
+        header = {"align":"left", "valign":"vcenter", "font_name":"Lato Light",
+                "font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,
                                             "text_wrap":True}
-        funds = {"align":"left", "valign":"vcenter", "font_name":"Lato Light",
-                                            "font_size":11}
+        
+        funds = {"align":"left", "valign":"vcenter", "font_name":"Lato Light","font_size":11}
         
         format_text = workbook.add_format({"align":"left", "valign":"vcenter", "font_name":"Lato Light",
                                            "font_size":10, "italic":True})
 
         format_money = workbook.add_format(money)
+
         format_money_2 = workbook.add_format({**money, "top": 1, "bottom": 1})
+
         format_pct = workbook.add_format(pct)
+
         format_pct_2 = workbook.add_format({**pct, "top": 1, "bottom": 1})
+
         format_header = workbook.add_format(header)
+
         format_header_2 = workbook.add_format({**header, "bottom": 1})
+
         format_funds = workbook.add_format(funds)
+
         format_funds_2 = workbook.add_format({**funds,"top": 1, "bottom": 1})
+
         format_title = workbook.add_format({"align":"center", "valign":"vcenter", "font_name":"Lato Light",
                                             "font_size":11, "font_color":"#FFFFFF", "bg_color":"#203764",
                                             "bold":True,"text_wrap": True})
@@ -459,10 +533,6 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
         format_date =workbook.add_format({"num_format": "dd/mm/yyyy","align": "center","valign": "vcenter","font_name": "Lato Light",
                                         "font_size":11, "font_color":"#FFFFFF", "bg_color":"#203764"})
         
-        
-        format_total_num = workbook.add_format({"num_format": "_-$* #,##0_-", "font_name":"Lato Light", "top":1,
-                                                "align":"center", "valign":"vcenter", "bold":True})
-
         format_total_pct = workbook.add_format({"num_format": '0.00%', "font_name":"Lato Light",
                                                 "align":"center","valign":"vcenter","font_color":"#000000","bg_color":"#D9D9D9", "bold":True})
 
@@ -499,13 +569,13 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
         # -- Allocation --
         worksheet.merge_range("I6:I7","% \nAsignación",format_title)
 
-        worksheet.write(5,3, "Portafolio Conservador", format_header)
-        worksheet.write(6,3, f"{port}", format_header_2)
+        worksheet.write(5,3, titulo, format_header)
+        worksheet.write(6,3, subtitulo, format_header_2)
         
         worksheet.merge_range("E6:F6", "NAV", format_title)
         worksheet.write(5,6, "Rendimiento YTD", format_title)
         
-        worksheet.merge_range(f"D{7+len(cols_name)+1}:F{7+len(cols_name)+1}","Rendimiento YTD - Perfil aaaa", format_background)
+        worksheet.merge_range(f"D{7+len(cols_name)+1}:F{7+len(cols_name)+1}",f"Rendimiento YTD - Perfil {tipo_sub}", format_background)
         worksheet.write(7+len(cols_name),6,total_portafolio,format_total_pct)
         worksheet.write(7+len(cols_name),8,allocation.iloc[0].sum(),format_total_pct)
         worksheet.write(7+len(cols_name)+1,3,"Estos fondos tienen NAVs diarios.",format_text)
@@ -516,7 +586,7 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
         fondos_fijos = [
             {"ticker": "OCWHAUA LX Equity", "nombre": "Wilshire - Hedged Opportunities - USD"},
             {"ticker": "WELSTGD SW EQUITY", "nombre": "Wealth Strategy Gold Fund- USD"},
-            # {"ticker": "TICKER_3", "nombre": "Nombre del Tercer Fondo"}
+            {"ticker": "FDAF", "nombre": "Finaccess Digital Assets Fund (FDAF) "}
         ]
 
         fila_inicio_bloque = 7 + len(cols_name) + 4
@@ -528,10 +598,23 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
             row_fecha = fila_inicio_bloque + (i * 4)
             row_valor = fila_inicio_bloque + (i * 4) + 1
             
-            p_min = prices[ticker].loc[prices.index.min()]
-            p_max = prices[ticker].loc[prices.index.max()]
-            f_min = prices[ticker].index.min()
-            f_max = prices[ticker].index.max()
+            if ticker == "OCWHAUA LX Equity":
+                p_min = df_ocw[ticker].loc[start_dt_ocw]
+                p_max = df_ocw[ticker].iloc[-1]
+                f_min = start_dt_ocw 
+                f_max = df_ocw.index[-1]
+                
+            elif ticker == "FDAF":
+                p_min = df_dfaf[ticker].loc[start_dt_dfaf]
+                p_max = df_dfaf[ticker].iloc[-1]
+                f_min = start_dt_dfaf
+                f_max = df_dfaf.index[-1]
+
+            else:
+                p_min = prices[ticker].loc[prices.index.min()]
+                p_max = prices[ticker].loc[prices.index.max()]
+                f_min = prices[ticker].index.min()
+                f_max = prices[ticker].index.max()
             
             worksheet.write(row_valor, 3, nombre, format_funds_2)
 
@@ -549,14 +632,7 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
         worksheet.write(7+len(cols_name)+14,3,"Este fondo tiene NAV oficial mensual proporcionado dentro de los 15 días posteriores al fin de cada mes.",format_text)
 
         # # --- INSERTAR EL GRÁFICO ---
-        # # Determinamos la fila donde termina tu última tabla para no encimarlo
-        # fila_grafico = 7 + len(cols_name) + 18 
-        
-        # worksheet.insert_image(
-        #     f'D{fila_grafico}', 
-        #     'chart.png', 
-        #     {'image_data': grafico_img, 'x_scale': 0.8, 'y_scale': 0.8}
-        # )
+        worksheet.insert_image(2, 11, f"graph_{port}.png", {'image_data': img_buffer})
 
         # Ajustar ancho de columnas
         worksheet.set_column("D:D", 38)
@@ -609,9 +685,9 @@ def formato_santander(funds_cmmdty):
         worksheet.write(10,0,"SAN - Turandot USD",format_header)
         worksheet.write(12,1,"Statistics",format_header)
 
-        funds_cmmdty = funds_cmmdty.loc[["BENIDUI Equity", "BELICUS Equity"]]
+        # funds_cmmdty = funds_cmmdty.loc[["BENIDUI Equity", "BELICUS Equity"]]
         
-        for i,stat in enumerate(funds_cmmdty.columns):
+        for i,stat in enumerate(funds_cmmdty.columns.drop("VaR")):
             # -- Nabucco --
             worksheet.write(1,2+i,stat,format_title)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
@@ -645,7 +721,7 @@ def formato_bbva(funds_cmmdty):
         workbook = writer.book
 
         # -- Hoja BBVA Risk Metricks --
-        worksheet1 = workbook.add_worksheet("Hoja BBVA Risk Metricks")
+        worksheet1 = workbook.add_worksheet("BBVA Risk Metricks")
 
         # -- Hoja de inputs --
         worksheet = workbook.add_worksheet("inputs")
@@ -660,29 +736,46 @@ def formato_bbva(funds_cmmdty):
         header = {"align":"left", "valign":"vcenter", "font_name":"Lato Light",
                                             "font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,
                                             }
+        
         format_header = workbook.add_format(header)
 
-        format_cuadricula = workbook.add_format({"border": 1})
+        format_header_2 = workbook.add_format({"align":"left", "valign":"vcenter", "font_name":"Lato Light",
+                                            "font_size":11, "font_color":"#000000", "bold":True, "bottom":1
+                                            })
+        
+        format_header_3 = workbook.add_format({"align":"left", "valign":"vcenter", "font_name":"Lato Light",
+                                            "font_size":11, "font_color":"#000000", "bold":True,
+                                            })
 
+        format_left = workbook.add_format({**header,'top': 1,'bottom': 1,'left': 1,'align': 'center','bold': True})
+
+        format_right = workbook.add_format({**header,'top': 1,'bottom': 1,'right': 1,'align': 'center','bold': True})
+      
         format_title = workbook.add_format({"align":"center", "valign":"vcenter", "font_name":"Lato Light",
                                             "font_size":11, "font_color":"#000000", "bg_color":"#DDEBF7",
                                             "bold":True,"text_wrap": True,"bottom": 5,"bottom_color": "#BFBFBF","bold":True})
+        
+        format_inferior = workbook.add_format({"bottom":1})
+
+        format_superior = workbook.add_format({"top":1})
 
         format_trama = workbook.add_format({"pattern": 14})
 
         #                        --- DISEÑO ---
 
-        # -- Hoja BBVA Risk Metricks --
-        worksheet1.hide_gridlines(2)
+        #               -- Hoja BBVA Risk Metricks --
 
-        worksheet1.write(0,2,"BBVA",format_header)
-        worksheet1.write(0,4,"BBVA",format_header)
-        worksheet1.write(1,2,"Absolute GT",format_header)
-        worksheet1.write(1,4,"Strategic Eq",format_header)
+        worksheet1.write(1,1,"",format_inferior)
+        worksheet1.write(0,2,"BBVA",format_header_3)
+        worksheet1.write(0,4,"BBVA",format_header_3)
+        worksheet1.write(1,2,"Absolute GT",format_header_2)
+        worksheet1.write(1,4,"Strategic Eq",format_header_2)
 
-        for i,stat in enumerate(funds_cmmdty.columns):
+        worksheet1.write(2,1,"Duration",format_header_3)
+
+        for i,stat in enumerate(funds_cmmdty.columns.drop("VaR")):
             # -- Absolute --
-            worksheet1.write(3+i,1,stat,format_header)
+            worksheet1.write(3+i,1,stat,format_header_3)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
                 worksheet1.write(3+i,2,funds_cmmdty[stat].iloc[0],pct)
             else:
@@ -693,7 +786,11 @@ def formato_bbva(funds_cmmdty):
                 worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[-1],pct)
             else:
                 worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[-1],num)
-        
+
+        worksheet1.write(2+len(funds_cmmdty.columns),1,"",format_superior)
+        worksheet1.write(2+len(funds_cmmdty.columns),2,"",format_superior)
+        worksheet1.write(2+len(funds_cmmdty.columns),4,"",format_superior)
+
         # Ajustar ancho de columnas
         worksheet1.set_column("A:A",3)
         worksheet1.set_column("B:B", 18)
@@ -702,7 +799,7 @@ def formato_bbva(funds_cmmdty):
         worksheet1.set_column("E:E",13)
 
 
-        # -- Hoja de inputs --
+        #                   -- Hoja de inputs --
         worksheet.hide_gridlines(2)
 
         for i in range(15):
@@ -714,14 +811,13 @@ def formato_bbva(funds_cmmdty):
         worksheet.write(10,0,"BBVA - Strategic USD",format_header)
         worksheet.write(12,1,"Statistics",format_header)
 
-        worksheet.write(4,1,"Duration",format_header)
-        worksheet.write(14,1,"Duration",format_header)
+        worksheet.write(4,1,"Duration",format_left)
+        worksheet.write(4,2,"",format_right)
 
-        
-        
-        funds_cmmdty = funds_cmmdty.loc[["BBSALIU Equity", "BBAGTIU Equity"]]
-        
-        for i,stat in enumerate(funds_cmmdty.columns):
+        worksheet.write(14,1,"Duration",format_left)
+        worksheet.write(14,2,"",format_right)
+
+        for i,stat in enumerate(funds_cmmdty.columns.drop("VaR")):
             # -- Absolute --
             worksheet.write(1,2+i,stat,format_title)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
@@ -748,16 +844,190 @@ def formato_bbva(funds_cmmdty):
     return data
 
 @st.cache_data
-def formato_morgan_stanley(writer, ticker):
-    """Diseño minimalista para Morgan Stanley"""
-    workbook = writer.book
-    worksheet = workbook.add_worksheet('MS Analysis')
-    # Ticker viene como string único aquí por la lógica previa
-    worksheet.write(0, 0, f"Analysis for: {ticker}", workbook.add_format({'italic': True}))
+def formato_morgan_stanley(funds_cmmdty):
+    output = io.BytesIO()
 
-#falta generar el diseño para rothschild y MS
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+
+        titulo=None
+        if funds_cmmdty.index == "MSHRCZU Equity":
+            titulo = "MS Risk Control USD"
+        else:
+            titulo = "MS Growth USD"
+
+        worksheet = workbook.add_worksheet(titulo[:-4])
+
+        # --- TUS FORMATOS ---
+        num = workbook.add_format({"num_format": "_-#,##0.00_-", "font_name":"Lato Light", 
+                                            "align":"center", "valign":"vcenter"})
+
+        pct = workbook.add_format({"num_format": '0.00%', "font_name":"Lato Light",
+                                        "align":"center", "valign":"vcenter"})
+        
+        header = {"align":"left", "valign":"vcenter", "font_name":"Lato Light",
+                                            "font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,}
+        
+        format_header = workbook.add_format(header)
+
+        format_title = workbook.add_format({"align":"center", "valign":"vcenter", "font_name":"Lato Light",
+                                            "font_size":11, "font_color":"#000000", "bg_color":"#DDEBF7",
+                                            "bold":True,"text_wrap": True,"bottom": 5,"bottom_color": "#BFBFBF","bold":True})
+
+            # --- DISEÑO ---
+        
+        worksheet.hide_gridlines(2)
+
+        worksheet.write(0,0,titulo,format_header)
+        worksheet.write(2,1,"Statistics",format_header)
+        
+        for i,stat in enumerate(funds_cmmdty.columns.drop("VaR")):
+            
+            worksheet.write(1,2+i,stat,format_title)
+            if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
+                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[0],pct)
+            else:
+                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[0],num)
+
+            
+        # Ajustar ancho de columnas
+        worksheet.set_column("A:A", )
+        worksheet.set_column("B:B", 10)
+        worksheet.set_column("C:C", 15)
+        worksheet.set_column("D:N", 13)
+
+    #Extraer los datos del buffer
+    data = output.getvalue()
+    return data,titulo
+
 @st.cache_data
-def generar_excel_fondos(assets,fnds_cmmdty):
+def formato_rothschild(funds_cmmdty):
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+        worksheet = workbook.add_worksheet("Rothschild Risk Stats")
+        worksheet.hide_gridlines(2)
+
+        # --- DEFINICIÓN DE FORMATOS ---
+        base_font = {"font_name": "Lato Light", "font_size": 11}
+        
+        fmt_yellow_hdr = workbook.add_format({**base_font, "bg_color": "#FFFF00", "bold": True, "align": "left"})
+        
+        fmt_section = workbook.add_format({**base_font, "bold": True, "top": 1})
+
+        fmt_section_2 = workbook.add_format({**base_font, "bold": True, "top": 2, "top_color": "#F4B084"})
+
+        fmt_red_row = workbook.add_format({**base_font, "bg_color": "#FF0000", "bold": False})
+        
+        num = workbook.add_format({**base_font, "num_format": "_-#,##0.00_-", "align": "center"})
+        pct = workbook.add_format({**base_font, "num_format": "0.00%", "align": "center"})
+        pct_2 = workbook.add_format({**base_font, "num_format": "0.00%", "align": "center", "bottom":1})
+        
+        label = workbook.add_format({**base_font, "align": "left"})
+
+        # --- ESCRITURA DE DATOS ---
+
+        worksheet.write("B3", "USD", fmt_yellow_hdr)
+        worksheet.write("E3", "USD Spanish", fmt_yellow_hdr)
+        worksheet.write("C3", "", fmt_yellow_hdr)
+        worksheet.write("F3", "", fmt_yellow_hdr)
+        
+        worksheet.write("B6", "Return", fmt_section_2)
+        worksheet.write("E6", "Retorno", fmt_section_2)
+        worksheet.write("C6", "", fmt_section_2)
+        worksheet.write("F6", "", fmt_section_2)
+        
+        worksheet.write("B7", "Total Return", label)
+        worksheet.write("E7", "Retorno total", label)
+
+        worksheet.write("C7", "", workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
+        worksheet.write("F7", "", workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
+
+        worksheet.write("B8", "Risk", fmt_section)
+        worksheet.write("E8", "Riesgo", fmt_section)
+        
+        worksheet.write("B9", "Standard Deviation (Annualized)", label)
+        worksheet.write("E9", "Desviación Estándar (Anualizado)", label)
+        worksheet.write("C9", funds_cmmdty.get("Vol", [0])[0], pct)
+        worksheet.write("F9", funds_cmmdty.get("Vol", [0])[0], pct)
+        
+        worksheet.write("B10", "VaR 95% (Daily)", label)
+        worksheet.write("E10", "VaR 95% (Diario ex-post)", label)
+        worksheet.write("C10", funds_cmmdty.get("VaR", [0])[0], pct)
+        worksheet.write("F10", funds_cmmdty.get("VaR", [0])[0], pct)
+        
+        worksheet.write("B11", "Tracking Error (Annualized)", label)
+        worksheet.write("E11", "Tracking Error (Anualizado)", label)
+        worksheet.write("C11", funds_cmmdty.get("Tracking Error", [0])[0], pct_2)
+        worksheet.write("F11", funds_cmmdty.get("Tracking Error", [0])[0], pct_2)
+
+        worksheet.write("B12", "Risk/Return", fmt_section)
+        worksheet.write("E12", "Riesgo/Retorno", fmt_section)
+        
+        metrics = [
+            ("Sharpe Ratio", "Ratio Sharpe", "num"),
+            ("Information Ratio", "Information Ratio", "num"),
+            ("Sortino Ratio", "Sortino Ratio", "num"),
+            ("Treynor Measure", "Medida Treynor", "num"),
+            ("Beta (ex-post)", "Beta (ex-post)", "num"),
+            ("Correlation", "Correlación", "num"),
+            ("R^2", "R^2", "num"),
+        ]
+
+        row = 12
+        for eng, esp, fmt_type in metrics:
+            worksheet.write(row, 1, eng, label)
+            worksheet.write(row, 4, esp, label)
+            
+            row += 1
+
+        #valores de Risk/Return
+        worksheet.write("C13", funds_cmmdty.get("Sharpe Ratio", [0])[0], num)
+        worksheet.write("F13", funds_cmmdty.get("Sharpe Ratio", [0])[0], num)
+        worksheet.write("C14", funds_cmmdty.get("Info. Ratio", [0])[0], num)
+        worksheet.write("F14", funds_cmmdty.get("Info. Ratio", [0])[0], num)
+        worksheet.write("C15", funds_cmmdty.get("Sortino Ratio", [0])[0], num)
+        worksheet.write("F15", funds_cmmdty.get("Sortino Ratio", [0])[0], num)
+        worksheet.write("C16", funds_cmmdty.get("Treynor Ratio", [0])[0], num)
+        worksheet.write("F16", funds_cmmdty.get("Treynor Ratio", [0])[0], num)
+        worksheet.write("C17", funds_cmmdty.get("Beta", [0])[0], num)
+        worksheet.write("F17", funds_cmmdty.get("Beta", [0])[0], num)
+        worksheet.write("C18", funds_cmmdty.get("Correlation", [0])[0], num)
+        worksheet.write("F18", funds_cmmdty.get("Correlation", [0])[0], num)
+        worksheet.write("C19", funds_cmmdty.get("R^2", [0])[0], num)
+        worksheet.write("F19", funds_cmmdty.get("R^2", [0])[0], num)
+
+        #Fila Especial: DURATION (Fila 19 - Resaltada en Rojo)
+        worksheet.write(19, 1, "Duration", fmt_red_row)
+        worksheet.write(19, 2, "", fmt_red_row)
+        worksheet.write(19, 4, "Duration", fmt_red_row)
+        worksheet.write(19, 5, "", fmt_red_row)
+
+        # MAX DRAWDOWN y Cierre (Fila 20)
+        worksheet.write(20, 1, "Max Drawdown             (S.I)", label)
+        worksheet.write(20, 4, "Caída Maxima               (S.I)", label)
+        worksheet.write("C21", funds_cmmdty.get("Max. Drawdown", [0])[0], pct)
+        worksheet.write("F21", funds_cmmdty.get("Max. Drawdown", [0])[0], pct)
+        
+        # Línea final inferior
+        worksheet.write(21, 1, "", workbook.add_format({"top": 1}))
+        worksheet.write(21, 2, "", workbook.add_format({"top": 1}))
+        worksheet.write(21, 4, "", workbook.add_format({"top": 1}))
+        worksheet.write(21, 5, "", workbook.add_format({"top": 1}))
+
+        # --- CONFIGURACIÓN DE COLUMNAS ---
+        worksheet.set_column("A:A", 2)
+        worksheet.set_column("B:B", 35)
+        worksheet.set_column("C:C", 10)
+        worksheet.set_column("D:D", 5)
+        worksheet.set_column("E:E", 35)
+        worksheet.set_column("F:F", 10)
+
+    data = output.getvalue()
+    return data
+
+def generar_excel_fondos(assets,fnds_cmmdty,fecha_fin,periodo):
     if assets is None:
         assets = []
 
@@ -773,11 +1043,16 @@ def generar_excel_fondos(assets,fnds_cmmdty):
             "diseno": formato_bbva,
             "tipo": "agrupado"
         },
-        # "Morgan Stanley": {
-        #     "tickers": ["MSHRCZU Equity", "MSHZUSD Equity"],
-        #     "diseno": formato_morgan_stanley,
-        #     "tipo": "individual"
-        # }
+        "Morgan Stanley": {
+            "tickers": ["MSHRCZU Equity", "MSHZUSD Equity"],
+            "diseno": formato_morgan_stanley,
+            "tipo": "individual"
+        },
+        "Rothschild": {
+            "tickers": ["RWMWICU Equity"],
+            "diseno": formato_rothschild,
+            "tipo": "agrupado"
+        }
     }
 
     for entidad, info in config_fondos.items():
@@ -788,20 +1063,19 @@ def generar_excel_fondos(assets,fnds_cmmdty):
                 # Generamos el excel pasando la función de diseño correspondiente
                 excel_data = info["diseno"](fnds_cmmdty.loc[info["tickers"]])
 
-                crear_boton(entidad, excel_data)
+                crear_boton(entidad, excel_data,fecha_fin,periodo)
                 pass
             else:
                 for ticker in activos_presentes:
-                    # excel_data = generar_excel_con_formato(info["diseno"], fnds_cmmdty)
-                    # crear_boton(ticker, excel_data)
+                    excel_data, titulo = info["diseno"](fnds_cmmdty.loc[[ticker]])
+                    crear_boton(titulo, excel_data,fecha_fin,periodo)
                     pass
 
-
-def crear_boton(nombre, data):
+def crear_boton(nombre, data,fecha_fin=None,periodo=None):
     st.download_button(
         label=f"Descargar Reporte {nombre}",
         data=data,
-        file_name=f"Reporte_{nombre}.xlsx",
+        file_name=f"{nombre} {fecha_fin} {periodo}.xlsx" if fecha_fin else f"{nombre} {periodo}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key=f"btn_{nombre}"
     )

@@ -1,14 +1,6 @@
 import pandas as pd
 import numpy as np
-# import warnings
-# from datetime import datetime
-# import calendar
 import streamlit as st
-
-# #display options
-# warnings.filterwarnings('ignore')
-# pd.set_option('display.float_format', lambda x: '{:.6f}'.format(x))
-# pd.set_option('display.max_columns', None)
 
 
 @st.cache_data

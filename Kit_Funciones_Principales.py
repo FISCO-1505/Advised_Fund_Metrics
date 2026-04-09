@@ -167,7 +167,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     # st.dataframe(fnds_cmmdty.columns)
     return fnds_cmmdty,formatos
 
-def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None, c_d=None):
+def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,c_d=None):
     """
     Genera la serie de precios combinada para los portafolios seleccionados.
     
@@ -295,7 +295,7 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None, c
     "Real Date": "{:%Y-%m-%d}"}
 
     # --- APARTADO DE GRÁFICOS ---
-    if stats is not None and portfolios is not None:
+    if stats is not None and portfolios is not None and grafico:
         
         kit_f_secundarias.graficos_interactivos(final_portfolios.loc[portfolios], prices[portfolios], stats,periodicity,"Portfolios")
 
@@ -307,7 +307,6 @@ def procesar_analisis(topic, data, selection, stats, assets):
     Maneja la lógica de fechas, comparativas y carga de métricas 
     para Funds y Portfolios de forma unificada.
     """
-    # Manejo de Fechas
     start_date = None
     selected_date = None
     
@@ -316,14 +315,27 @@ def procesar_analisis(topic, data, selection, stats, assets):
     else:
         selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
-    # Configuración de Comparativa (Toggle)
+    #Comparativa
     toggle_button = st.toggle("Comparative", key=f"toggle_{topic}_{selection}")
-    stats_aux = stats if toggle_button else stats #None
-    assets_aux = assets if toggle_button else assets #None
     grafico= True if toggle_button else None
+    
+    # -- session state para los botones de los fondos --
+    current_params = f"{selected_date}_{sorted(assets)}"
+    
+    if "last_params_2" not in st.session_state:
+        st.session_state.last_params_2 = current_params
+        st.session_state.cargar_tabla_2 = False
 
+    # Si los parámetros cambian, apagamos la tabla
+    if st.session_state.last_params_2 != current_params:
+        st.session_state.cargar_tabla_2 = False
+        st.session_state.last_params_2 = current_params
+    
     # Botón de Carga
-    if st.button("Load metrics", key=f"btn_{topic}_{selection}"):
+    if st.button("Load Process", key=f"btn_{topic}_{selection}_{toggle_button}"):
+        st.session_state.cargar_tabla_2 = True
+
+    if st.session_state.cargar_tabla_2:
 
         # --- validación ---
         if not assets:
@@ -335,31 +347,32 @@ def procesar_analisis(topic, data, selection, stats, assets):
             return
         # ----------------------------
 
-        with st.spinner("Calculating metrics..."):
-            # Seleccionar la función según el topic
+        with st.container():
             func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
             
-            # Llamada a la función según selection
             if selection == "Custom Date":
-                results, formatos = func_principal(data, selected_date, selection, stats_aux, assets_aux,grafico, start_date)
+                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico, start_date)
+                periodo_excel=f"{start_date} to {selected_date}"
+                fecha_excel=None
 
             else:
-                results, formatos = func_principal(data, selected_date, selection, stats_aux, assets_aux,grafico)
+                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico)
+                periodo_excel="SI" if selection == "Since Inception" else selection
+                fecha_excel=selected_date
 
-            # Filtrado y Visualización
             cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
             final_df = results[cols_to_show].loc[assets]
             
             st.dataframe(final_df.style.format(formatos, na_rep="-"))
             
             # Generar excel
-            kit_f_secundarias.generar_excel_fondos(assets,results[stats])
+            kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
+            st.success("You can download the Reports!")
 
 #falta realizar el gráfico y los casos de la fechas e info de DFAF y OCW (wilshire)
-#solo mostrar los portafolios 6,7,8
 def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
     df_prices = _data['Prices'].set_index('Date')
-    df_ocw = _data['OCWHAUA LX Equity'].set_index('Date')  
+    df_ocw = _data['OCWHAUA LX Equity'].set_index('Date')
     df_dfaf = _data["FDAF"].set_index("Date")
 
     df_prices_funds = df_prices.join(df_ocw, how='left')
@@ -385,6 +398,8 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
 
     # Definición de Fecha de Inicio según Periodicidad
     fecha_inicio_aux = kit_f_secundarias.start_dt(fecha_fin, periodicity,None)
+    start_dt_ocw_aux = kit_f_secundarias.start_dt(df_ocw.index[-1], periodicity,None)
+    start_dt_dfaf_aux = kit_f_secundarias.start_dt(df_dfaf.index[-1], periodicity,None)
 
     if fecha_inicio_aux == "INSUFFICIENT_DATA":
         st.warning(f"Insufficient historical data for {periodicity}. "
@@ -400,15 +415,48 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
 
             idx_start = df_prices.index.get_indexer([fecha_inicio_aux], method='backfill')[0]
             fecha_inicio = df_prices.index[idx_start]
+
+            #se extraer las fechas inicios de OCW y DFAF para lenar la tabla de excel
+            idx_start_ocw = df_ocw.index.get_indexer([start_dt_ocw_aux], method='backfill')[0]
+            idx_start_fdaf = df_dfaf.index.get_indexer([start_dt_dfaf_aux], method='backfill')[0]
+            start_dt_ocw = df_ocw.index[idx_start_ocw]
+            start_dt_dfaf = df_dfaf.index[idx_start_fdaf]
+
         
         st.success(f"Analysis period: {fecha_inicio.date()} to {pd.to_datetime(fecha_fin).date()}")
 
-    #precios filtrados
+    #precios filtrados de los fondos
     prices = df_prices_funds.loc[fecha_inicio:fecha_fin]
+    
+    #extraccion de los bnchmarkas asociados a cada portafolio
+    df_info=_data["Info"]
+    df_filt_bmrk_port = df_info.loc[df_info['Ticker'].isin(portfolio_select), ['Ticker', 'Associate Benchmark']]
+    # cols_bmrk =df_info["Associate Benchmark"][df_info["Ticker"].isin(portfolio_select)].to_list()
 
-    #bmrk acumulado filtrado
+    ##retornos acumulados y filtrados de los portafolios y de los benchmarks para el gráfico
+    # -- bmrk acumulado y filtrado --
+    returns_bmrk_z = returns_bmrk_z.loc[fecha_inicio:fecha_fin]
     accm_bmrk = kit_metricas.cumm_return(returns_bmrk_z)
-    accm_bmrk = accm_bmrk.loc[fecha_inicio:fecha_fin]
+    accm_bmrk = accm_bmrk[df_filt_bmrk_port["Associate Benchmark"].to_list()]
+    
+    # -- portafolio acumulado y filtrado --
+    # df_portfolio_prices = df_portfolio_prices.loc[fecha_inicio:fecha_fin]
+    returns_port,_ = kit_metricas.df_returns(df_portfolio_prices)
+    #returns con NaN para el cálculo del acumulado
+    returns_port=returns_port.replace(0,np.nan)
+    returns_port_z=returns_port.fillna(0)
+    returns_port_z = returns_port_z.loc[fecha_inicio:fecha_fin]
+    accm_port = kit_metricas.cumm_return(returns_port_z)
+    accm_port = accm_port[portfolio_select]
+
+    #extrear la relacion de cada portafolio con su benchmark
+    dict_relation= dict(zip(df_filt_bmrk_port['Ticker'], df_filt_bmrk_port['Associate Benchmark']))
+
+    #diccionario de los portafolios y benchmarks
+    dict_grafico={
+        "Portafolio" : accm_port,
+        "Benchmark" : accm_bmrk
+        }
 
     with st.container():
         st.write("### Reports generated")
@@ -446,13 +494,24 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
             #allocation de los fondos
             allocation=final_prices.reset_index(drop=True)*df_curnt_nominals.reset_index(drop=True)/portfolio_final_price
 
-            excel_file=kit_f_secundarias.crear_excel(cols_name, total_portfolio,start_prices,
-                                                    final_prices,allocation,port,prices)
+            # -- generación del grafico del portafolio --
+            data_port = dict_grafico["Portafolio"][port]
+            ticker_bmrk = dict_relation.get(port)
+            data_bmrk = dict_grafico["Benchmark"].get(ticker_bmrk)
+            # img_buffer = kit_f_secundarias.generar_grafico_tablas(data_port, data_bmrk, port)
+            img_buffer = kit_f_secundarias.generar_grafico_linea_suave(data_port, data_bmrk, port)
 
+            # generar el excel de cada portafolio
+            excel_file=kit_f_secundarias.crear_excel(cols_name, total_portfolio,start_prices,
+                                                    final_prices,allocation,port,prices,img_buffer,
+                                                    df_ocw,df_dfaf,start_dt_ocw,start_dt_dfaf)
+
+            
+            # boton de descarga
             st.download_button(
-                label=f"Descargar {port}",
+                label=f"Descargar {port[:6]}",
                 data=excel_file,
-                file_name=f"reporte_portafolio{port}.xlsx",
+                file_name=f"Funds Rendimientos -{port[5:6]} {fecha_fin} {periodicity}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"Reporte_{port}")
         
