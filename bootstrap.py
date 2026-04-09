@@ -27,7 +27,7 @@ def ensure_private_lib():
     except ImportError:
         if "GITHUB_TOKEN" in st.secrets:
             token = st.secrets["GITHUB_TOKEN"]
-            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git" #para poder descargr una rama es de la siguiente forma "@{nombre_rama}" agregandose al final"
+            repo_url = f"git+https://{token}@github.com/FISCO-1505/Finaccess_Resources.git@Test2_branch" #para poder descargr una rama es de la siguiente forma "@nombre_rama" agregandose al final"
             
             with st.spinner("Uploading sources..."):
                 try:
@@ -35,11 +35,13 @@ def ensure_private_lib():
                         sys.executable, "-m", "pip", 
                         "install", "--target", local_lib_path, 
                         repo_url
-                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL #stdout=None, stderr=None
+                        )
 
                     st.success("Sources loaded correctly.")
                     import FISCO_Sources
                 except Exception as e:
+                    st.error(f"Error técnico de pip: {str(e)}")
                     st.error(f"Error: Library did not load correctly.")
                     st.stop()
         else:

@@ -9,3 +9,4 @@ plotly==5.20.0
 xlsxwriter==3.1.9
 matplotlib==3.8.2
 scipy==1.11.4
+streamlit-autorefresh==1.0.1 #siempre se debe de poner para cada proyecto
