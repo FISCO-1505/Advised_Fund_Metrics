@@ -407,6 +407,24 @@ def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
 
 def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     plt.switch_backend('Agg')
+
+    if nombre_port[5:6] == "6":
+        titulo = "Portafolio Conservador (Port-6)"
+        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        legend_indice = "Portafolio Conservador (Port-6)"
+        legend_bmrk = "Indice de Referencia (20% Renta Variable/80% Renta Fija)"
+    elif nombre_port[5:6] == "7":
+        titulo = "Portafolio Balanceado (Port-7)"
+        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        legend_indice = "Portafolio Conservador (Port-7)"
+        legend_bmrk = "Indice de Referencia (40% Renta Variable/60% Renta Fija)"
+
+    elif nombre_port[5:6] == "8":
+        titulo = "Portafolio Crecimiento Balanceado (Port-8)"
+        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        legend_indice = "Portafolio Crecimiento Balanceado (Port-8)"
+        legend_bmrk = "Indice de Referencia (60% Renta Variable/40% Renta Fija)"
+
     fig, ax = plt.subplots(figsize=(12, 4))
 
     def suavizar_datos(df):
@@ -419,11 +437,11 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
 
     # 1. Graficar datos suavizados
     x_p, y_p = suavizar_datos(df_port)
-    ax.plot(x_p, y_p, color='#203764', label='Portfolio', linewidth=2.2, antialiased=True, zorder=3)
+    ax.plot(x_p, y_p, color='#203764', label=legend_indice, linewidth=2.2, antialiased=True, zorder=3)
     
     if df_bmrk is not None:
         x_b, y_b = suavizar_datos(df_bmrk)
-        ax.plot(x_b, y_b, color='#D3D3D3', label='Benchmark', linewidth=1.5, alpha=0.8, zorder=2)
+        ax.plot(x_b, y_b, color='#D3D3D3', label=legend_bmrk, linewidth=1.5, alpha=0.8, zorder=2)
 
     # 2. Resaltar el eje 0 (Línea de base)
     ax.axhline(0, color='#808080', linewidth=1.2, zorder=1) # Gris medio
@@ -451,8 +469,9 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     ax.spines['left'].set_color(color_gris)   # Línea del eje Y en gris
 
     # Estética final
-    ax.set_title(f"Performance: {nombre_port}", fontsize=11, fontweight='bold', color='#333333', pad=15)
+    ax.set_title(f"{titulo} <br> {subtitulo}", fontsize=11, fontweight='bold', color='#0073C6', pad=15)
     ax.legend(loc='upper left', frameon=False, fontsize=9)
+    ax.set_ti
     
     # Quitar marcos innecesarios
     ax.spines['top'].set_visible(False)
