@@ -469,7 +469,7 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     ax.spines['left'].set_color(color_gris)   # Línea del eje Y en gris
 
     # Estética final
-    ax.set_title(f"{titulo} <br> {subtitulo}", fontsize=11, fontweight='bold', color='#0073C6', pad=15)
+    ax.set_title(f"{titulo} {subtitulo}", fontsize=11, fontweight='bold', color='#0073C6', pad=15)
     ax.legend(loc='upper left', frameon=False, fontsize=9)
     
     
