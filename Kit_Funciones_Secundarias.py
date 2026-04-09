@@ -471,7 +471,7 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     # Estética final
     ax.set_title(f"{titulo} <br> {subtitulo}", fontsize=11, fontweight='bold', color='#0073C6', pad=15)
     ax.legend(loc='upper left', frameon=False, fontsize=9)
-    ax.set_ti
+    
     
     # Quitar marcos innecesarios
     ax.spines['top'].set_visible(False)
