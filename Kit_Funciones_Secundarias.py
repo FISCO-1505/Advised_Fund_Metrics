@@ -19,22 +19,24 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
     min_dt = pd.to_datetime(min_allowed_date)
  
     if period == "Since Inception":
-        return None 
+        return None, None
     
     elif period == "Custom Date":
         if custom_start is None:
             # Si no hay fecha seleccionada, devolvemos un error específico
             return "MISSING CUSTOM DATE"
+        
         start_date = pd.to_datetime(custom_start)
+        #cosniderar que se debe de ir un dia hanil hacia atras
         
     elif period == "MTD":
-        start_date = (end_dt.replace(day=1) - pd.Timedelta(days=1))
+        start_date = pd.Timestamp(year=end_dt.year, month=end_dt.month, day=1)#(end_dt.replace(day=1) - pd.Timedelta(days=1))
         
     elif period == "YTD":
-        start_date = pd.Timestamp(year=end_dt.year - 1, month=12, day=31)
+        start_date = pd.Timestamp(year=end_dt.year, month=1, day=1)
         
     elif period == "1Y":
-        start_date = end_dt - pd.DateOffset(years=1)
+        start_date = end_dt - pd.DateOffset(years=1) +  pd.Timedelta(days=1)
         
     
     if start_date < min_dt:
@@ -229,15 +231,31 @@ def calendar(df, mode):
         return str(selected_date)
 
 @st.cache_data(show_spinner=False)
-def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity, key_suffix=""):
+def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity,
+                          ticker_map,dict_formatos,returns,key_suffix=""):
     """
      Función auxiliar para generar gráficos de barras para métricas
      y gráfico de líneas para precios.
     """
     st.divider()
+    #lista de las variables que se excluyen para graficar la métrica correspondiente
+    blacklist = [
+        "PX_LAST", "% Change", "Negative Returns", "RF", 
+        "Daily Active Return", "Drawdown", "Real Date"
+    ]
+
+    #extracción de los nombres cortos del ticker correspondiente
+    map_names = {v: k for k, v in ticker_map.items()}
+    
+    # Renombrar columnas y renglones con los nombres
+    df_prices = df_prices.rename(columns=map_names)
+    df_metrics = df_metrics.rename(index=map_names)
     
     st.write("### Historical Price Evolution")
-    prices_norm = (df_prices / df_prices.iloc[0]) * 100
+    # Primer precio válido para evitar NaN en aquellos fondos que iniciaron después
+    first_valid_prices = df_prices.apply(lambda x: x.dropna().iloc[0] if not x.dropna().empty else 1)
+
+    prices_norm = (df_prices / first_valid_prices) * 100
     fig_line = px.line(prices_norm, x=prices_norm.index, y=prices_norm.columns,
                        labels={'value': 'Normalized Price', 'Date': 'Date'},
                        title=f"Price of {periodicity}")
@@ -248,16 +266,23 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity, key
 
     if stats_to_plot:
         st.write("### Key Metrics Comparison")
-        available_stats = [s for s in stats_to_plot if s in df_metrics.columns]
-        
-        if available_stats:
-            # Tu bucle interno para las barras
-            for stat in available_stats:
+
+        # Bucle para generar los gráficos
+        for stat in stats_to_plot:
+            if stat in df_metrics.columns and stat in dict_formatos and stat not in blacklist:
+                # Extraer formato limpio para Plotly (ej: "{:.2%}" -> ".2%")
+                raw_fmt = dict_formatos[stat]
+                clean_fmt = raw_fmt.replace("{:", "").replace("}", "")
+
                 fig_bar = px.bar(df_metrics, x=df_metrics.index, y=stat,
-                                 text_auto='.2f',
-                                 title=f"Metric: {stat}",
-                                 color=df_metrics.index,
-                                 color_discrete_sequence=px.colors.qualitative.Prism)
+                                text_auto=clean_fmt,
+                                title=f"Metric: {stat}",
+                                color=df_metrics.index,
+                                color_discrete_sequence=px.colors.qualitative.Prism)
+                
+                # Ajuste de escala en el eje Y si es porcentaje
+                if "%" in clean_fmt:
+                    fig_bar.update_layout(yaxis_tickformat='.1%')
 
                 fig_bar.update_layout(
                     xaxis_title="Assets",
@@ -266,6 +291,35 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity, key
                     bargap=.25)
                 
                 st.plotly_chart(fig_bar,width="stretch", key=f"bar_{stat}_{key_suffix}")
+    
+    # --- MATRIZ DE CORRELACIÓN ---
+    st.write("### Correlation Matrix per Asset")
+    # returns = df_prices.pct_change().dropna(how='all')
+    # st.dataframe(returns)
+    if not returns.empty:
+        corr_matrix = returns.corr()
+        fig_heatmap = px.imshow(corr_matrix,
+                                text_auto=".2f",
+                                color_continuous_scale='RdBu_r',
+                                zmin=-1, zmax=1, # Escala estándar de correlación
+                                height=650, # Ajusta este valor para el tamaño total del gráfico
+                                aspect="equal", # Mantiene las celdas cuadradas
+                                title="")
+
+        # MOVER LA BARRA DE COLOR (LEYENDA) HACIA ABAJO
+        fig_heatmap.update_layout(
+            coloraxis_colorbar=dict(
+                title="Corr",
+                thicknessmode="pixels", 
+                thickness=15,    # Ancho de la barra de color
+                xpad=5,          # <--- AQUÍ: Espacio entre matriz y leyenda (5px es muy poco)
+                lenmode="fraction", 
+                len=0.8,         # Qué tan larga es la barra (0.8 = 80% del alto)
+            ),
+            margin=dict(l=50, r=10, t=50, b=50)
+        )
+
+        st.plotly_chart(fig_heatmap,width="stretch", key=f"heat_{key_suffix}")
 
 @st.cache_data
 def calculus_bmrk(_data):
@@ -342,7 +396,7 @@ def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
 
     #es importante ejecutar primero la jerarquia Standar para posteriormente generar
     #los portafolios de portafolios (Combo)
-    execution_order = ['Standard', 'Combo']
+    execution_order = ['Standard','Combo']
 
     for p_type in execution_order:
         #filtramos los portafolios según el tipo de este nivel
@@ -407,21 +461,22 @@ def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
 
 def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     plt.switch_backend('Agg')
+    fecha=pd.to_datetime(df_port.index[-1])
 
     if nombre_port[5:6] == "6":
         titulo = "Portafolio Conservador (Port-6)"
-        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        subtitulo = f"{fecha.year} YTD"#cambiar a tomar la fecha año
         legend_indice = "Portafolio Conservador (Port-6)"
         legend_bmrk = "Indice de Referencia (20% Renta Variable/80% Renta Fija)"
     elif nombre_port[5:6] == "7":
         titulo = "Portafolio Balanceado (Port-7)"
-        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        subtitulo = f"{fecha.year} YTD"#cambiar a tomar la fecha año
         legend_indice = "Portafolio Conservador (Port-7)"
         legend_bmrk = "Indice de Referencia (40% Renta Variable/60% Renta Fija)"
 
     elif nombre_port[5:6] == "8":
         titulo = "Portafolio Crecimiento Balanceado (Port-8)"
-        subtitulo = "2026 YTD"#cambiar a tomar la fecha año
+        subtitulo = f"{fecha.year} YTD"#cambiar a tomar la fecha año
         legend_indice = "Portafolio Crecimiento Balanceado (Port-8)"
         legend_bmrk = "Indice de Referencia (60% Renta Variable/40% Renta Fija)"
 
@@ -488,8 +543,8 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     
     return imgdata
 
-@st.cache_data
-def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
+@st.cache_data(show_spinner=False)
+def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_prices,
                 allocation,port,prices,img_buffer,
                 df_ocw,df_dfaf,start_dt_ocw,start_dt_dfaf):
     
@@ -508,9 +563,10 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
         subtitulo = "BALANCEADO (Port-8)"
         tipo_sub = "Balanceado"
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
         workbook = writer.book
-        worksheet = workbook.add_worksheet("Portfolio")
+        worksheet = workbook.add_worksheet("Portfolio",)
 
         # --- TUS FORMATOS ---
         money = {"num_format": "_-$* #,##0.00_-", "font_name":"Lato Light", "align":"center", "valign":"vcenter"}
@@ -561,7 +617,7 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
 
         for i,fund in enumerate(cols_name):
             # -- Fondos --
-            worksheet.write(7+i,3,fund,format_funds)
+            worksheet.write(7+i,3,large_name_port[i],format_funds)
 
             # -- Fecha inicio --
             # worksheet.write(6,4,start_prices.index,format_date)
@@ -669,7 +725,8 @@ def crear_excel(cols_name,total_portafolio,start_prices, final_prices,
 def formato_santander(funds_cmmdty):
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
         workbook = writer.book
         worksheet = workbook.add_worksheet("Santander")
 
@@ -735,8 +792,9 @@ def formato_santander(funds_cmmdty):
 @st.cache_data
 def formato_bbva(funds_cmmdty):
     output = io.BytesIO()
-
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter",engine_kwargs={'options': options}) as writer:
         workbook = writer.book
 
         # -- Hoja BBVA Risk Metricks --
@@ -866,7 +924,8 @@ def formato_bbva(funds_cmmdty):
 def formato_morgan_stanley(funds_cmmdty):
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter",engine_kwargs={'options': options}) as writer:
         workbook = writer.book
 
         titulo=None
@@ -923,7 +982,8 @@ def formato_morgan_stanley(funds_cmmdty):
 def formato_rothschild(funds_cmmdty):
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
         workbook = writer.book
         worksheet = workbook.add_worksheet("Rothschild Risk Stats")
         worksheet.hide_gridlines(2)

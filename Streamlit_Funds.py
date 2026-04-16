@@ -53,7 +53,7 @@ def contenido_principal():
                 # all_assets, assets_selected = kit_f_secundarias.assets_filter(topic, data["Info"])
                 all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
                 assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
-
+            
                 #recuperar los assets con el nombre original (ticker)
                 assets_tickers = [ticker_map[n] for n in assets]
                 
@@ -61,14 +61,14 @@ def contenido_principal():
                 all_stats, stats_selected = kit_f_secundarias.stats_filter(topic)
                 stats = st.multiselect("Stats:", all_stats, default=stats_selected, label_visibility="collapsed")
 
-                kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers)
+                kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers,ticker_map)
 
             elif topic == "Returns Table":
 
                 st.markdown("<h3 style='color: #1D59A9;'>Select Portfolios</h3>", unsafe_allow_html=True)
                 all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
                 assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
-
+                
                 #recuperar los assets con el nombre original (ticker)
                 assets_tickers = [ticker_map[n] for n in assets]
                 

@@ -29,7 +29,7 @@ def cumm_return(returns,fecha_fin=None):
         return df_result
         
     return df_cumm
-        
+
 @st.cache_data
 def RF(df_prices, fecha_fin=None):
     '''
@@ -244,7 +244,7 @@ def Treynor_ratio(returns, rf_series, beta_df, fechas_reales):
 def daily_active_returns(returns, returns_bmrk, fechas_reales=None):
     '''
     Calcula la matriz de retornos activos diarios (Fondo - Benchmark)
-    alineando calendarios y tratando los NaNs como 0% de movimiento.
+    alineando calendarios y tratando los NaNs como 0.
     '''
     active_returns_dict = {}
 
@@ -259,7 +259,7 @@ def daily_active_returns(returns, returns_bmrk, fechas_reales=None):
             bmrk_r = bmrk_r.loc[:fecha_corte]
         
         # (returns con 0s) - (Benchmark)
-        active_returns_dict[col] = fondo_r.reindex(bmrk_r.index).fillna(0) - bmrk_r
+        active_returns_dict[col] =  fondo_r.fillna(0) - bmrk_r#fondo_r.reindex(bmrk_r.index).fillna(0) - bmrk_r
 
     df_active_returns = pd.DataFrame(active_returns_dict)
 
@@ -285,13 +285,15 @@ def Tracking_Error(returns, returns_bmrk, fechas_reales=None):
             fondo_r = returns[col]
             bmrk_r = returns_bmrk[col]
 
-        active_diff = (fondo_r.reindex(bmrk_r.index).fillna(0) - bmrk_r)
-        
+        active_diff = (fondo_r.fillna(0) - bmrk_r) #(fondo_r.reindex(bmrk_r.index).fillna(0) - bmrk_r)
+
         #Cálculo del Tracking Error Anualizado
         if len(active_diff) > 1:
              te_values[col]= active_diff.std() * np.sqrt(252)
         else:
             te_values[col] = np.nan
+
+        
             
     return pd.DataFrame(te_values, index=['Tracking Error'])
 
@@ -348,16 +350,18 @@ def correlation(returns, returns_bmrk, fechas_reales=None):
     return pd.DataFrame(corr_values, index=['Correlation'])
 
 @st.cache_data
-def Drawdown(prices, fechas_reales):
+def Drawdown(returns, fechas_reales):
     '''
     Calcula el Drawdown actual (en la fecha real) respecto al máximo histórico previo.
     '''
-    pico_historico = prices.max()
-    all_drawdowns = (prices / pico_historico) - 1
+    serie_precios = (1 + returns).cumprod()
+    previous_pick = serie_precios.cummax()
+
+    all_drawdowns = (serie_precios / previous_pick) - 1
     
     #validación de NaT
     dd_final = {}
-    for c in prices.columns:
+    for c in returns.columns:
         fecha = fechas_reales.get(c)
         
         
@@ -369,23 +373,29 @@ def Drawdown(prices, fechas_reales):
     return pd.DataFrame(dd_final, index=["Drawdown"])
 
 @st.cache_data
-def Max_Drawdown(prices, fechas_reales):
+def Max_Drawdown(returns, fechas_reales):
     '''
     Calcula la caída máxima histórica (el punto más bajo del drawdown) de forma segura.
     '''
-    pico_historico = prices.cummax()
-    all_drawdowns = (prices / pico_historico) - 1
     
+    serie_precios = (1 + returns).cumprod()
+    previous_pick = serie_precios.cummax()
 
-    #captura la peor caída registrada hasta cada punto en el tiempo
-    mdd_full = all_drawdowns.expanding().min()
-    
+    all_drawdowns = (serie_precios / previous_pick) - 1
+
     mdd_final = {}
-    for c in prices.columns:
+    for c in returns.columns:
         fecha = fechas_reales.get(c)
 
-        if pd.notnull(fecha) and fecha in mdd_full.index:
-            mdd_final[c] = mdd_full.loc[fecha, c]
+        if pd.notnull(fecha):
+            
+            # Filtrar lso drawdown hasta la fecha
+            mdd_full = all_drawdowns.loc[:fecha,c]
+
+            if not mdd_full.empty:
+                mdd_final[c] = mdd_full.min()
+            else:
+                mdd_final[c] = np.nan
         else:
             mdd_final[c] = np.nan
             
