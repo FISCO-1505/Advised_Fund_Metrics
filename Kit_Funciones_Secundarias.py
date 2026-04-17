@@ -54,6 +54,7 @@ def cargar_datos_excel(_file):
         )
     return dict_dfs
 
+@st.cache_resource(show_spinner=False)
 def validar_estructura_excel(archivo):
     """
     Realiza una validación exhaustiva de hojas, columnas y contenido del Excel.

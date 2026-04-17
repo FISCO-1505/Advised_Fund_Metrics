@@ -374,6 +374,10 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
             cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
             final_df = results[cols_to_show].loc[assets]
             
+            #se cambia el nombre de ticker al nombre del fondo en la tabla final
+            map_names = {v: k for k, v in ticker_map.items()}
+            final_df = final_df.rename(index=map_names)
+
             st.dataframe(final_df.style.format(formatos, na_rep="-"))
             
             # Generar excel
