@@ -7,8 +7,6 @@ import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Funciones_Principales as kit_f_principales
 from FISCO_Sources import auth, images
 
-images.imagen_f("Advised Funds Metrics")
-
 def contenido_principal():
 
     data = None
@@ -21,7 +19,22 @@ def contenido_principal():
         if archivo_subido is None:
             st.warning("Please upload the corresponding file.")
         else:
-            data = kit_f_secundarias.cargar_datos_excel(archivo_subido)
+
+            # --- PROCESO DE VALIDACIÓN ---
+            es_valido, mensaje = kit_f_secundarias.validar_estructura_excel(archivo_subido)
+            
+            if not es_valido:
+                st.error("⚠️ Validation Error in Excel Structure")
+                st.warning(mensaje)
+                data = None
+            
+            else:
+                # --- SI PASA LA VALIDACIÓN, CONTINUAR ---
+                st.success("File validated successfully!")
+                data = kit_f_secundarias.cargar_datos_excel(archivo_subido)
+
+
+
     
         st.title(":blue[Select an option]")
 
@@ -37,8 +50,6 @@ def contenido_principal():
 
     #imagen del logo de la institución    
     images.imagen_home("Advisors")
-
-
 
     if selection != "Home":
         if data is not None and selection is not None:
@@ -108,10 +119,11 @@ def contenido_principal():
 
 #%%
 def main():
-    
     # Obtener ruta del archivo
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
+
+    images.imagen_f("Advised Funds Metrics")
 
     auth.gestionar_sesion_segura(
         contenido_principal_func = contenido_principal,

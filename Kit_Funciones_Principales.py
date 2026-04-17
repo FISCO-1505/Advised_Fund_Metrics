@@ -173,10 +173,6 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
         kit_f_secundarias.graficos_interactivos(fnds_cmmdty.loc[assets], prices[assets], stats,periodicity,
                                                 ticker_map,formatos,returns[assets],"Funds")
     
-    # st.dataframe(stats)
-    # st.dataframe(fnds_cmmdty[stats])
-    
-    # st.dataframe(fnds_cmmdty.columns)
     return fnds_cmmdty,formatos
 
 def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,ticker_map=None,c_d=None):
@@ -315,7 +311,6 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
         kit_f_secundarias.graficos_interactivos(final_portfolios.loc[portfolios], prices[portfolios], stats,periodicity,
                                                 ticker_map,formatos,returns[portfolios],"Portfolios")
 
-    # st.dataframe(returns)
     return final_portfolios, formatos
 
 def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
@@ -409,6 +404,7 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
 
     # Precios de los portafolios
     df_portfolio_prices=kit_f_secundarias.portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals)
+    
     # Definición de Fecha de Inicio según Periodicidad
     fecha_inicio_aux = pd.Timestamp(year=pd.to_datetime(fecha_fin).year - 1, month=12, day=31) 
     start_dt_ocw_aux = pd.Timestamp(year=pd.to_datetime(df_ocw.index[-1]).year - 1, month=12, day=31) 
@@ -453,6 +449,7 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
     
     # -- portafolio acumulado y filtrado --
     returns_port,_ = kit_metricas.df_returns(df_portfolio_prices)
+    
     #returns con NaN para el cálculo del acumulado
     returns_port=returns_port.replace(0,np.nan)
     returns_port_z=returns_port.fillna(0)
@@ -490,7 +487,8 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
 
             #nombre de las columnas de cada portafolio y nombre largo del portafolio
             cols_name=df_curnt_nominals.columns.to_list()
-            large_name_port=df_info["Long Name"][df_info["Ticker"].isin(cols_name)].reset_index(drop=True)
+            large_name_port = df_info[df_info["Ticker"].isin(cols_name)].set_index("Ticker")["Long Name"].to_dict()
+            # large_name_port=df_info["Long Name"][df_info["Ticker"].isin(cols_name)].reset_index(drop=True)
             
             #precios de los fondos de cada portafolio
             start_prices=prices[cols_name].loc[[prices.index.min()]]

@@ -54,6 +54,119 @@ def cargar_datos_excel(_file):
         )
     return dict_dfs
 
+def validar_estructura_excel(archivo):
+    """
+    Realiza una validación exhaustiva de hojas, columnas y contenido del Excel.
+    Retorna (True, None) si es válido, (False, mensaje_error) si hay errores.
+    """
+    try:
+        # Cargar el archivo Excel
+        xls = pd.ExcelFile(archivo)
+        hojas_presentes = xls.sheet_names
+
+        # Validar existencia de hojas mínimas requeridas
+        hojas_requeridas = ["Info", "Portfolio Prices", "Prices", "OCWHAUA LX Equity", 
+                            "FDAF", "Funds - BMRK", "Weights", "Nominals"]
+        
+        for hoja in hojas_requeridas:
+            if hoja not in hojas_presentes:
+                return False, f"Missing sheet: '{hoja}'"
+
+        # --- VALIDACIÓN HOJA: Info ---
+        df_info = pd.read_excel(xls, "Info")
+        cols_info = ["Type", "Ticker", "Short Name", "Long Name", "Associate Benchmark", "Start Date"]
+        if not all(c in df_info.columns for c in cols_info):
+            return False, f"Sheet 'Info' must contain columns: {cols_info}"
+        
+        tipos_permitidos = ["Fund", "Portfolio", "Benchmark", "Index", "Commodity"]
+        if not df_info["Type"].isin(tipos_permitidos).all():
+            invalidos = df_info[~df_info["Type"].isin(tipos_permitidos)]["Type"].unique()
+            return False, f"Sheet 'Info': Invalid values in 'Type' column: {invalidos}"
+
+        # --- VALIDACIÓN HOJA: Portfolio Prices ---
+        df_pp = pd.read_excel(xls, "Portfolio Prices")
+        if "Date" not in df_pp.columns:
+            return False, "Sheet 'Portfolio Prices' must have a 'Date' column."
+        
+        # Tickers con Start Date < 9/8/2022
+        df_info['Start Date'] = pd.to_datetime(df_info['Start Date'])
+        fecha_limite = pd.to_datetime("2022-08-09")
+        tickers_pp_esperados = df_info[(df_info["Start Date"] < fecha_limite) & (df_info["Type"]=="Portfolio")]["Ticker"].tolist()
+        
+        for t in tickers_pp_esperados:
+            if t not in df_pp.columns:
+                return False, f"Sheet 'Portfolio Prices': Missing ticker '{t}' (Start Date < 2022-08-09)."
+
+        # --- VALIDACIÓN HOJA: Prices ---
+        df_prices = pd.read_excel(xls, "Prices")
+
+        if df_prices.shape[0 ]== 1:
+            return False, f"Sheet 'Prices': The sheet doesn´t have any data"
+        
+        cols_pre_prices = ["Date", "USGG3M Index"]
+        if not all(c in df_prices.columns for c in cols_pre_prices):
+            return False, f"Sheet 'Prices' must contain: {cols_pre_prices}"
+        
+        # Tickers de Info donde Type .isin() [Fund, Index, Commodity] y Ticker no en [OCWHAUA LX Equity, FDAF]
+        tipos_prices = ["Fund", "Index", "Commodity"]
+        excluidos = ["OCWHAUA LX Equity", "FDAF"]
+        tickers_prices_esp = df_info[
+            (df_info["Type"].isin(tipos_prices)) & 
+            (~df_info["Ticker"].isin(excluidos))
+            ]["Ticker"].tolist()
+
+        for t in tickers_prices_esp:
+            if t not in df_prices.columns:
+                return False, f"Sheet 'Prices': Missing ticker '{t}' based on Type filtering."
+
+        # --- VALIDACIÓN HOJA: OCWHAUA LX Equity ---
+        df_oc = pd.read_excel(xls, "OCWHAUA LX Equity")
+        if not all(c in df_oc.columns for c in ["Date", "OCWHAUA LX Equity"]):
+            return False, "Sheet 'OCWHAUA LX Equity' must have columns 'Date' and 'OCWHAUA LX Equity'."
+            
+        # --- VALIDACIÓN HOJA: FDAF ---
+        df_fdaf = pd.read_excel(xls, "FDAF")
+        if not all(c in df_fdaf.columns for c in ["Date", "FDAF"]):
+            return False, "Sheet 'FDAF' must have columns 'Date' and 'FDAF'."
+
+        # --- VALIDACIÓN HOJA: Funds - BMRK ---
+        df_bmrk = pd.read_excel(xls, "Funds - BMRK")
+        cols_bmrk = ["Ticker", "Short Name", "Associate Benchmark", "Start Date"]
+        if not all(c in df_bmrk.columns for c in cols_bmrk):
+            return False, f"Sheet 'Funds - BMRK' must have columns: {cols_bmrk}"
+
+        # --- VALIDACIÓN HOJA: Weights ---
+        df_w = pd.read_excel(xls, "Weights")
+        cols_w = ["Benchmark Name", "Component Ticker", "Weights", "Start Date"]
+        if not all(c in df_w.columns for c in cols_w):
+            return False, f"Sheet 'Weights' must have columns: {cols_w}"
+        
+        # Agrupación y suma de pesos
+        sum_weights = df_w.groupby(["Benchmark Name", "Start Date"])["Weights"].sum()
+        if not (sum_weights.round(2) == 100).all():
+            error_groups = sum_weights[sum_weights != 100].index.tolist()
+            return False, f"Sheet 'Weights': The sum of weights is not 100 in groups: {error_groups}"
+
+        # --- VALIDACIÓN HOJA: Nominals ---
+        df_nom = pd.read_excel(xls, "Nominals")
+        cols_nom = ["Portfolio", "Ticker", "Start Date", "Nominal", "Type"]
+        if not all(c in df_nom.columns for c in cols_nom):
+            return False, f"Sheet 'Nominals' must have columns: {cols_nom}"
+        
+        # Validar que Portfolios de Nominals existan en Tickers de Info (Type == Portfolio)
+        portafolios_info = df_info[df_info["Type"] == "Portfolio"]["Ticker"].unique()
+        portafolios_nominals = df_nom["Portfolio"].unique()
+        
+        check_port = pd.Series(portafolios_nominals).isin(portafolios_info)
+        if not check_port.all():
+            invalid_ports = portafolios_nominals[~check_port]
+            return False, f"Sheet 'Nominals': The following portfolios are not registered in 'Info' as 'Portfolio' type: {invalid_ports}"
+
+        return True, None
+
+    except Exception as e:
+        return False, f"An unexpected error occurred during validation: {str(e)}"
+
 def assets_filter(topic, _data):
 
     if topic == "Returns Table":
@@ -616,8 +729,11 @@ def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_p
         worksheet.hide_gridlines(2)
 
         for i,fund in enumerate(cols_name):
+            # se extrea el nombre del fondo, si no existe se pone el del ticker
+            nombre_fondo = large_name_port.get(fund, fund)
+
             # -- Fondos --
-            worksheet.write(7+i,3,large_name_port[i],format_funds)
+            worksheet.write(7+i,3,nombre_fondo,format_funds)
 
             # -- Fecha inicio --
             # worksheet.write(6,4,start_prices.index,format_date)
@@ -1084,8 +1200,8 @@ def formato_rothschild(funds_cmmdty):
         worksheet.write(19, 5, "", fmt_red_row)
 
         # MAX DRAWDOWN y Cierre (Fila 20)
-        worksheet.write(20, 1, "Max Drawdown             (S.I)", label)
-        worksheet.write(20, 4, "Caída Maxima               (S.I)", label)
+        worksheet.write(20, 1, "Max Drawdown", label)
+        worksheet.write(20, 4, "Caída Maxima", label)
         worksheet.write("C21", funds_cmmdty.get("Max. Drawdown", [0])[0], pct)
         worksheet.write("F21", funds_cmmdty.get("Max. Drawdown", [0])[0], pct)
         
@@ -1158,18 +1274,3 @@ def crear_boton(nombre, data,fecha_fin=None,periodo=None):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key=f"btn_{nombre}"
     )
-
-#  col1, col2 = st.columns([.4, .6], vertical_alignment="center")
-#         # Títulos en columna 1
-#         with col1:
-#             st.subheader("Año")
-#             st.subheader("Mes")
-            
-#         # Elegir Año y Mes
-#         with col2:
-#             # Elegir Año
-#             año = st.selectbox("Año", años, años.index(max(años)), label_visibility="collapsed")
-#             # Filtrar y elegir Meses
-#             meses = mesaño.query("Año == @año")["Mes"].unique().tolist()
-#             meses.sort()
-#             mes = st.selectbox("Mes", meses, meses.index(max(meses)), label_visibility="collapsed")
