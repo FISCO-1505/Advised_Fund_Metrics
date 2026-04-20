@@ -361,9 +361,10 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity,
     #extracción de los nombres cortos del ticker correspondiente
     map_names = {v: k for k, v in ticker_map.items()}
     
-    # Renombrar columnas y renglones con los nombres
+    # Renombrar columnas e indices con los nombres
     df_prices = df_prices.rename(columns=map_names)
     df_metrics = df_metrics.rename(index=map_names)
+    returns = returns.rename(index=map_names)
     
     st.write("### Historical Price Evolution")
     # Primer precio válido para evitar NaN en aquellos fondos que iniciaron después

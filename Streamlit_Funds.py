@@ -129,7 +129,7 @@ def main():
         contenido_principal_func = contenido_principal,
         password_secreta = st.secrets["PSW_STREAMLIT"],
         idioma = "EN",
-        timeout_segundos = 600 #10 min
+        timeout_segundos = 3600 #1 hora
     )
 
         
