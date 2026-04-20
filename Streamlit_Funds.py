@@ -42,10 +42,16 @@ def contenido_principal():
                                 label_visibility="collapsed"
                                 )
 
-        selection = st.pills(label="Options", label_visibility="collapsed",
-                                options=["Home", "MTD", "YTD","1Y",
-                                        "Since Inception","Custom Date"],
-                                default="Home"
+        if topic == "Returns Table":
+            selection = st.pills(label="Options", label_visibility="collapsed",
+                                    options=["Home", "YTD"],
+                                    default="YTD"
+                            )
+        else:
+            selection = st.pills(label="Options", label_visibility="collapsed",
+                                    options=["Home", "MTD", "YTD","1Y",
+                                            "Since Inception","Custom Date"],
+                                    default="Home"
                             )
 
     #imagen del logo de la institución    

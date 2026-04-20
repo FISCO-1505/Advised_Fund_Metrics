@@ -380,9 +380,10 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
 
             st.dataframe(final_df.style.format(formatos, na_rep="-"))
             
-            # Generar excel
-            kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
-            st.success("You can download the Reports!")
+            if topic == "Funds":
+                # Generar excel
+                kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
+                st.success("You can download the Reports!")
 
 def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
     df_prices = _data['Prices'].set_index('Date')
@@ -523,7 +524,7 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
             
             # boton de descarga
             st.download_button(
-                label=f"Descargar {port[:6]}",
+                label=f"Download {port[:6]}",
                 data=excel_file,
                 file_name=f"Funds Rendimientos -{port[5:6]} {fecha_fin} {periodicity}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

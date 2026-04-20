@@ -837,7 +837,7 @@ def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_p
     data = output.getvalue()
     return data
 
-# -- Funciones de crear excel de las estadísticas --
+# -- Funciones de crear excel de las fondos --
 @st.cache_data
 def formato_santander(funds_cmmdty):
     output = io.BytesIO()
@@ -1269,7 +1269,7 @@ def generar_excel_fondos(assets,fnds_cmmdty,fecha_fin,periodo):
 
 def crear_boton(nombre, data,fecha_fin=None,periodo=None):
     st.download_button(
-        label=f"Descargar Reporte {nombre}",
+        label=f"Download Report {nombre}",
         data=data,
         file_name=f"{nombre} {fecha_fin} {periodo}.xlsx" if fecha_fin else f"{nombre} {periodo}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
