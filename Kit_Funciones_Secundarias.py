@@ -391,7 +391,7 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity,
 
                 fig_bar = px.bar(df_metrics, x=df_metrics.index, y=stat,
                                 text_auto=clean_fmt,
-                                title=f"Metric: {stat}",
+                                title=f"Metric: Correlation by its Benchmark " if stat == "Correlation" else f"Metric: {stat}",
                                 color=df_metrics.index,
                                 color_discrete_sequence=px.colors.qualitative.Prism)
                 
@@ -409,8 +409,7 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity,
     
     # --- MATRIZ DE CORRELACIÓN ---
     st.write("### Correlation Matrix per Asset")
-    # returns = df_prices.pct_change().dropna(how='all')
-    # st.dataframe(returns)
+
     if not returns.empty:
         corr_matrix = returns.corr()
         fig_heatmap = px.imshow(corr_matrix,
