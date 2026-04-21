@@ -17,6 +17,12 @@ venv.bak/
 *.xlsx
 *.xls
 
+#carpeta para streamlit cloud para clonar la librería externa
+vendor/
+
+# streamlit screts
+.streamlit
+
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb
