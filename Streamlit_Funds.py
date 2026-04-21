@@ -1,157 +1,143 @@
-import pandas as pd
-import numpy as np
-import warnings
-from datetime import datetime
-import calendar
+import bootstrap #Carga la libreria de FISCO_Sources, siempre ponerlo
 import streamlit as st
 from pathlib import Path
+import gc
 
-import Kit_Funciones as kit_funciones
-import Kit_Metricas as kit_metrics
-from cryptography.fernet import Fernet
+import Kit_Funciones_Secundarias as kit_f_secundarias
+import Kit_Funciones_Principales as kit_f_principales
+from FISCO_Sources import auth, images
 
-#display options
-warnings.filterwarnings('ignore')
-pd.set_option('display.float_format', lambda x: '{:.6f}'.format(x))
-pd.set_option('display.max_columns', None)
+def contenido_principal():
 
-# Insertar logo finaccess
-        # image = Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_azul.png"))
-        # st.image(image)
+    data = None
+    with st.sidebar:
+        st.success("¡Access granted!", icon=":material/lock_open:")            
+    
+        #cargar archivo
+        archivo_subido = st.file_uploader("Load the Excel file", type=["xlsx","xls"])
+        
+        if archivo_subido is None:
+            st.warning("Please upload the corresponding file.")
+        else:
+
+            # --- PROCESO DE VALIDACIÓN ---
+            es_valido, mensaje = kit_f_secundarias.validar_estructura_excel(archivo_subido)
+            
+            if not es_valido:
+                st.error("⚠️ Validation Error in Excel Structure")
+                st.warning(mensaje)
+                data = None
+            
+            else:
+                # --- SI PASA LA VALIDACIÓN, CONTINUAR ---
+                st.success("File validated successfully!")
+                data = kit_f_secundarias.cargar_datos_excel(archivo_subido)
 
 
 
-#lectura de datos (se debe de cambiar por el archivo a subir)
-# data=pd.read_excel('Funds_aut.xlsx',sheet_name=None)
+    
+        st.title(":blue[Select an option]")
+
+        topic = st.selectbox("Choose one:",["Funds", "Portfolio","Returns Table"],
+                                label_visibility="collapsed"
+                                )
+
+        if topic == "Returns Table":
+            selection = st.pills(label="Options", label_visibility="collapsed",
+                                    options=["Home", "YTD"],
+                                    default="YTD"
+                            )
+        else:
+            selection = st.pills(label="Options", label_visibility="collapsed",
+                                    options=["Home", "MTD", "YTD","1Y",
+                                            "Since Inception","Custom Date"],
+                                    default="Home"
+                            )
+
+    #imagen del logo de la institución    
+    images.imagen_home("Advisors")
+
+    if selection != "Home":
+        if data is not None and selection is not None:
+            # Títulos dinámicos
+            titulo = "Funds Analysis" if topic == "Funds" else ("Portfolio Analysis" if topic == "Portfolio" else "Returns Tables")
+            st.markdown(f"<h1 style='text-align: center; color: #1D59A9;'>{titulo}</h1>", unsafe_allow_html=True)
+            
+            #fucion que decide si es funds o portafolios para poder procesar la info
+            if topic in ["Funds", "Portfolio"]:
+                # Filtros de Assets y Stats
+                st.markdown("<h3 style='color: #1D59A9;'>Select assets</h3>", unsafe_allow_html=True)
+                # all_assets, assets_selected = kit_f_secundarias.assets_filter(topic, data["Info"])
+                all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
+            
+                #recuperar los assets con el nombre original (ticker)
+                assets_tickers = [ticker_map[n] for n in assets]
+                
+                st.markdown("<h3 style='color: #1D59A9;'>Select stats</h3>", unsafe_allow_html=True)
+                all_stats, stats_selected = kit_f_secundarias.stats_filter(topic)
+                stats = st.multiselect("Stats:", all_stats, default=stats_selected, label_visibility="collapsed")
+
+                kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers,ticker_map)
+
+            elif topic == "Returns Table":
+
+                st.markdown("<h3 style='color: #1D59A9;'>Select Portfolios</h3>", unsafe_allow_html=True)
+                all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
+                
+                #recuperar los assets con el nombre original (ticker)
+                assets_tickers = [ticker_map[n] for n in assets]
+                
+                selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
+
+                # Si la fecha o los assets cambian, esta cadena cambiará.
+                current_params = f"{selected_date}_{sorted(assets_tickers)}"
+
+                #inicializamos estados si no existen
+                if "last_params" not in st.session_state:
+                    st.session_state.last_params = current_params
+                    st.session_state.cargar_tabla = False
+
+                # Si los parámetros cambian, apagamos la tabla
+                if st.session_state.last_params != current_params:
+                    st.session_state.cargar_tabla = False
+                    st.session_state.last_params = current_params
+                    
+                if st.button("Load Process", key="btn_tables"):
+                    st.session_state.cargar_tabla = True
+
+                if st.session_state.cargar_tabla:
+                    # --- validación ---
+                    if not assets_tickers:
+                        st.warning("⚠️ Please select at least one asset/portfolio to continue.")
+                        return
+                    
+                    kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers)
+                    st.success("You can download the Reports!")
 
 
+        elif data is None and selection != "Home":
+            st.info("⚠️ First, upload the Excel file on the side bar to view this section.")
+    else:
+        pass
+        
 
 #%%
 def main():
-    
     # Obtener ruta del archivo
     global ruta_base
     ruta_base = Path(__file__).resolve().parent
-    
-    # # Configuración de la página
-    # st.set_page_config(page_icon=Image.open(path.join(ruta_base, "Resources", "Imagenes", "Logo_finaccess_f.png")),
-    #                    page_title = "Rendimientos México")
-    
-    # Cargar clave y crear instancia de Fernet
-    clave = kit_funciones.cargar_clave()
-    fernet = Fernet(clave)
-    
-    pswd_ok = kit_funciones.desencriptar_con_manejo_errores(st.secrets["PSW_STREAMLIT"], fernet)
-    @st.dialog("Validación de acceso")
-    def validar_contrasena():
-        with st.form("validar_pswd", enter_to_submit=True):
-            #se solicta la pswd
-            password = st.text_input("Ingresa tu acceso", type="password")
-        
-            if st.form_submit_button("Confirmar"):
-                if password == pswd_ok:
-                    #se crea una sesion
-                    st.session_state["pswd"] = True
-                    #cerrar el dialogo
-                    st.rerun()
-                else:
-                    st.error("Validación incorrecta", icon=':material/error:')
-        
-    # Usa Session State para controlar la visibilidad del dialogo y el acceso
-    if "pswd" not in st.session_state:
-        st.session_state["pswd"] = False
-        
-    if not st.session_state["pswd"]:
-        with st.sidebar:
-            # Si la contraseña no se ha validado, muestra un botón para abrir el diálogo
-            if st.button("Validar", icon=":material/lock_person:"):
-                validar_contrasena()
-    else:
-        data = None
-        # ______________________________________ Contenido Principal ______________________________________
-        with st.sidebar:
-            st.success("¡Acceso concedido!", icon=":material/lock_open:")            
-        
-            #cargar archivo
-            archivo_subido = st.file_uploader("Sube tu Excel", type=["xlsx","xls"])
-            if archivo_subido is None:
-                st.warning("Favor de cargar el archivo correspondiente")
-            else:
-                data = kit_funciones.cargar_datos_excel(archivo_subido)
-        
-        
-        # Insertar menú lateral
-        with st.sidebar:
-            # Título
-            st.title(":blue[Selecciona una Opción]")
-            # Pills Options
-            selection = st.pills(label="Options", label_visibility="collapsed",
-                                 options=["Home", "1Y", "MTD", "YTD"],
-                                 default="Home"
-                                )
-            
-        # Ejecutar opción seleccionada
-        if selection != "Home":
-            if data is not None:
-                if selection == "1Y":
-                    # rendimientos()
-                    st.header("Tablas de 1Y")
-                    st.subheader("Funds_Commodity_test")
-                    funds_results_test=kit_metrics.Funds_Commodity_test(data,'2018-01-04','1Y')
-                    st.dataframe(funds_results_test)
-                    st.subheader("Funds_Commodity")
-                    funds_results=kit_metrics.Funds_Commodity(data,'2018-01-04')
-                    st.dataframe(funds_results)
 
-                    st.subheader("Index_test")
-                    index_result_test=kit_metrics.Index_test(data,'2017-01-03','1Y')#1Y: '2016-12-06'; YTD: '2018-01-04'
-                    st.dataframe(index_result_test)
-                    st.subheader("Index")
-                    index_result=kit_metrics.Index(data,'2018-08-10')
-                    st.dataframe(index_result)
+    images.imagen_f("Advised Funds Metrics")
 
-                    # st.subheader("Benchmark_test")
-                    # kit_metrics.Benchmark_test(data,'2018-08-10','1Y')
-                    # st.subheader("Benchmark")
-                    # kit_metrics.Benchmark(data,'2018-01-08')
+    auth.gestionar_sesion_segura(
+        contenido_principal_func = contenido_principal,
+        password_secreta = st.secrets["PSW_STREAMLIT"],
+        idioma = "EN",
+        timeout_segundos = 3600 #1 hora
+    )
 
-                elif selection == "T-MTD":
-                    # t_approach()
-                    st.header("Tablas de MTD")
-                elif selection == "YTD":
-                    # auto_correos_carpetas()
-                    st.header("Tablas de YTD")
-                    st.subheader("Funds_Commodity_test")
-                    funds_results_test2=kit_metrics.Funds_Commodity_test(data,'2018-01-04','YTD')
-                    st.dataframe(funds_results_test2)
-                    st.subheader("Funds_Commodity")
-                    funds_results2=kit_metrics.Funds_Commodity(data,'2018-01-04')
-                    st.dataframe(funds_results2)
-
-                    st.subheader("Index_test")
-                    index_result_test2=kit_metrics.Index_test(data,'2017-01-03','YTD')#1Y: '2016-12-06'; YTD: '2018-01-04'
-                    st.dataframe(index_result_test2)
-                    st.subheader("Index")
-                    index_result2=kit_metrics.Index(data,'2018-08-10')
-                    st.dataframe(index_result2)
-
-                    # st.subheader("Benchmark_test")
-                    # kit_metrics.Benchmark_test(data,'2018-08-10','YTD')
-                    # st.subheader("Benchmark")
-                    # kit_metrics.Benchmark(data,'2018-01-08')
-                # else:
-                #     pass
-            else:
-                st.info("⚠️ Para visualizar esta sección, primero carga el archivo Excel en el menú lateral.")
-        else:
-            st.info("Bienvenido. Por favor sube un archivo para comenzar el análisis. Pondremos la imagen")
-
-        #____________________________________ Cerrar Sesión ____________________________________
-        if st.sidebar.button("Cerrar sesión"):
-            st.cache_data.clear()
-            st.toast("Caché eliminada")
-            st.session_state["pswd"] = False
-            st.rerun()
         
 if __name__ == "__main__":
     main()
