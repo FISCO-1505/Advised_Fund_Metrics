@@ -6,6 +6,19 @@ import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Metricas as kit_metricas
 
 def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,ticker_map=None,c_d=None):
+    """
+    Realiza el análisis cuantitativo completo de fondos y materias primas.
+    
+    Proceso:
+    1. Limpia y une precios de fondos con datos de activos específicos (OCW, FDAF).
+    2. Calcula benchmarks personalizados y define la ventana temporal de análisis.
+    3. Ejecuta una batería de métricas (Sharpe, Sortino, VaR, Beta, Tracking Error, etc.).
+    4. Estructura los resultados en un DataFrame formateado y dispara visualizaciones.
+
+    Retorna:
+    - fnds_cmmdty: DataFrame con todas las estadísticas calculadas por activo.
+    - formatos: Diccionario de mapeo para representación visual (%, $, decimales).
+    """
     df_info = _data['Info']
     index_cols = df_info[df_info['Type'].isin(['Fund', 'Commodity'])]['Ticker'].tolist()
 
@@ -177,11 +190,17 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
 
 def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,ticker_map=None,c_d=None):
     """
-    Genera la serie de precios combinada para los portafolios seleccionados.
-    
-    _data: Diccionario con las hojas 'Portfolio Prices', 'Prices', 'Nominals'.
-    selected_portfolios: Lista de strings con los nombres de los portafolios.
-    fecha_fin: Fecha de corte del análisis.
+    Calcula el desempeño de carteras de inversión (Portfolios) basándose en nominales y precios.
+
+    Proceso:
+    1. Reconstruye la serie de precios histórica del portafolio usando 'portfolio_Prices'.
+    2. Determina el periodo de análisis (YTD, MTD, Since Inception, etc.).
+    3. Calcula métricas de retorno acumulado, volatilidad y drawdowns.
+    4. Genera comparativas gráficas si se activan los parámetros correspondientes.
+
+    Retorna:
+    - final_portfolios: DataFrame con el KPI performance del portafolio.
+    - formatos: Diccionario de configuración de estilo.
     """
 
     df_prices = _data['Prices'].set_index('Date')
@@ -315,8 +334,14 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
 
 def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
     """
-    Maneja la lógica de fechas, comparativas y carga de métricas 
-    para Funds y Portfolios de forma unificada.
+    Maneja el flujo de trabajo de la UI para procesar tanto fondos como portafolios.
+
+    Responsabilidades:
+    - Gestión de fechas (Calendario simple o de rango para fechas custom).
+    - Control de estado (Session State) para evitar cálculos innecesarios al cambiar parámetros.
+    - Validación de selecciones (advierte si no hay activos o métricas seleccionadas).
+    - Orquestación: Llama a Funds_Commodity o Portfolio según el 'topic'.
+    - Renderizado: Muestra la tabla final estilizada y habilita la descarga de reportes Excel.
     """
     start_date = None
     selected_date = None
@@ -386,6 +411,31 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
                 st.success("You can download the Reports!")
 
 def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
+    """
+    Genera reportes de rendimiento detallados y archivos Excel descargables para 
+    una selección de portafolios.
+
+    Esta función realiza un flujo de trabajo de "Reporting" de principio a fin:
+    1. Preparación de Datos: Cruza precios de fondos con activos específicos 
+       (OCW/DFAF) y benchmarks asociados.
+    2. Cálculo de Ventana Temporal: Define la fecha de inicio basándose en la 
+       periodicidad (YTD por defecto) y calcula fechas de referencia para activos especiales.
+    3. Análisis de Desempeño: Calcula retornos acumulados tanto para el portafolio 
+       como para su Benchmark correspondiente para fines comparativos.
+    4. Reconstrucción de Cartera: Identifica los nominales más recientes y calcula 
+       el 'Asset Allocation' actual basándose en los precios de cierre.
+    5. Integración Visual: Genera un gráfico de línea (smooth line chart) que se 
+       convierte en un buffer de imagen para ser insertado en el Excel.
+    6. Exportación: Llama a la utilidad de creación de Excel y habilita botones de 
+       descarga individuales en la interfaz de Streamlit.
+
+    Parámetros:
+    - _data (dict): Diccionario maestro con Precios, Nominales e Info de activos.
+    - fecha_fin (str/datetime): Fecha de corte del análisis.
+    - portfolio_select (list): Lista de tickers de portafolios a procesar.
+    - periodicity (str): Periodo de análisis (ej. "YTD", "Since Inception").
+
+    """
     df_prices = _data['Prices'].set_index('Date')
     df_ocw = _data['OCWHAUA LX Equity'].set_index('Date')
     df_dfaf = _data["FDAF"].set_index("Date")
@@ -530,4 +580,3 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"Reporte_{port}")
         
-    return

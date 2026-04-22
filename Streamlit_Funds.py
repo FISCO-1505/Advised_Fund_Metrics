@@ -8,6 +8,12 @@ import Kit_Funciones_Principales as kit_f_principales
 from FISCO_Sources import auth, images
 
 def contenido_principal():
+    """
+    Función en donde se lleva a cabo el contenido principal de toda 
+    la interfaz de streamlit con el llamado respectivo de sus funciones
+    para poder llevar a cabo el correcto uso, cálculo y manipulación 
+    de la herramienta.
+    """
 
     data = None
     with st.sidebar:
@@ -125,6 +131,11 @@ def contenido_principal():
 
 #%%
 def main():
+    """
+    Función main en donde se hace llamado de la gestión segura de
+    la librería privada (FISCO_Sources) y así obtener un acceso
+    controlado.
+    """
     # Obtener ruta del archivo
     global ruta_base
     ruta_base = Path(__file__).resolve().parent

@@ -15,6 +15,18 @@ warnings.filterwarnings('ignore')
 
 @st.cache_data(show_spinner=False)
 def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03'):
+    """
+    Determina la fecha de inicio del análisis basada en el periodo seleccionado.
+
+    Parámetros:
+    end_date (datetime): Fecha final del reporte.
+    period (str): Tipo de periodo (MTD, YTD, 1Y, Since Inception, Custom Date).
+    custom_start (datetime, opcional): Fecha manual si el periodo es 'Custom Date'.
+    min_allowed_date (str): Límite inferior de datos históricos disponibles.
+
+    Retorna:
+    Timestamp/str: La fecha de inicio calculada o un código de error de validación.
+    """
     end_dt = pd.to_datetime(end_date)
     min_dt = pd.to_datetime(min_allowed_date)
  
@@ -46,6 +58,16 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
 
 @st.cache_resource(show_spinner=False)
 def cargar_datos_excel(_file):
+    """
+    Lee un archivo Excel y convierte todas sus pestañas en un diccionario de DataFrames.
+
+    Parámetros:
+    _file (FileUploader/str): Archivo o ruta del Excel a cargar.
+
+    Retorna:
+    dict: Diccionario donde las llaves son los nombres de las hojas y los valores los DataFrames, 
+          con limpieza de tipos de datos complejos (listas a strings).
+    """
     dict_dfs = pd.read_excel(_file, sheet_name=None)
     
     for sheet in dict_dfs:
@@ -57,8 +79,16 @@ def cargar_datos_excel(_file):
 @st.cache_resource(show_spinner=False)
 def validar_estructura_excel(archivo):
     """
-    Realiza una validación exhaustiva de hojas, columnas y contenido del Excel.
-    Retorna (True, None) si es válido, (False, mensaje_error) si hay errores.
+    Realiza una auditoría técnica del archivo Excel para asegurar la integridad del modelo.
+
+    Verifica la existencia de hojas obligatorias, columnas específicas por pestaña,
+    consistencia de tipos de activos, suma de pesos (100%) y existencia de precios.
+
+    Parámetros:
+    archivo (File): Archivo Excel cargado.
+
+    Retorna:
+    tuple: (bool, str) donde el booleano indica éxito y el string contiene el mensaje de error.
     """
     try:
         # Cargar el archivo Excel
@@ -169,7 +199,19 @@ def validar_estructura_excel(archivo):
         return False, f"An unexpected error occurred during validation: {str(e)}"
 
 def assets_filter(topic, _data):
+    """
+    Gestiona la interfaz de selección de activos (Pills) y filtra el universo de datos.
 
+    Divide la lógica según el contexto (Fondos, Portafolios o Tabla de Retornos) y 
+    ofrece opciones de selección rápida (Custom, All, Manager).
+
+    Parámetros:
+    topic (str): El apartado de la app ("Funds", "Portfolio", "Returns Table").
+    _data (DataFrame): Información base de los activos (Hoja 'Info').
+
+    Retorna:
+    tuple: (nombres_disponibles, activos_seleccionados, mapeo_ticker_nombre).
+    """
     if topic == "Returns Table":
         name = "Returns"
         # Para Returns Table solo mostramos Custom y All
@@ -225,10 +267,18 @@ def assets_filter(topic, _data):
     return assets_names, assets_selected, mapping
 
 def stats_filter(topic):
-    '''
-    topic: nombre del apartado principal para obtener las métricas correspondientes
-    stats_list: list de las estadisticas de acuerdo al topic
-    '''
+    """
+    Proporciona los menús de selección para las métricas de las estadísticas.
+
+    Define qué estadísticas están disponibles para Fondos vs. Portafolios y 
+    gestiona las preselecciones automáticas según el perfil del usuario.
+
+    Parámetros:
+    topic (str): Contexto del análisis ("Funds" o "Portfolio").
+
+    Retorna:
+    tuple: (lista_total_stats, lista_stats_seleccionadas).
+    """
 
     stats=[]
     stats_selected=[]
@@ -281,8 +331,14 @@ def stats_filter(topic):
 
 def calendar(df, mode):
     """
-    df: DataFrame con los datos (considerando solo la columna de las fechas).
-    mode: "range" (inicio y fin de fechas) o "single" (solo fecha final).
+    Despliega widgets de fecha en Streamlit con validación de disponibilidad de datos.
+
+    Parámetros:
+    df (Series/DataFrame): Columna de fechas para determinar los límites (min/max).
+    mode (str): "range" para intervalos (Inicio y Fin) o "single" para una fecha única.
+
+    Retorna:
+    str/tuple: Fecha(s) seleccionada(s) en formato string o (None, None) si hay error.
     """
 
     available_dates = pd.to_datetime(df).dt.date.unique()
@@ -435,8 +491,22 @@ def graficos_interactivos(df_metrics, df_prices, stats_to_plot, periodicity,
 
         st.plotly_chart(fig_heatmap,width="stretch", key=f"heat_{key_suffix}")
 
+# -- Funciones para generar los cálculos de los benchmarks
 @st.cache_data
 def calculus_bmrk(_data):
+    """
+    Calcula los retornos y niveles de precio para los Benchmarks del modelo.
+
+    Realiza el rebalanceo histórico de pesos basado en las fechas de inicio, 
+    calcula el retorno ponderado de los componentes.
+
+    Parámetros:
+    _data (dict): Diccionario con DataFrames de 'Prices' y 'Weights'.
+
+    Retorna:
+    tuple: (returns_bmrk, px_last, returns_bmrk_z) 
+           Retornos con NaNs, Precios acumulados y Retornos con ceros.
+    """
     df_prices = _data['Prices'].set_index('Date')
     df_weights = _data['Weights'].copy()
     
@@ -478,8 +548,18 @@ def calculus_bmrk(_data):
 @st.cache_data
 def bmrk_aux_funds(df_funds_bmrk, returns_bmrk, fecha_fin):
     """
-    Crea una matriz de retornos de benchmark que 'sigue' a cada fondo 
-    según su asignación histórica.
+    Construye una matriz de benchmarks personalizada para cada fondo.
+
+    Mapea el benchmark asociado a cada ticker a lo largo del tiempo, permitiendo 
+    cambios históricos de índice de referencia (seguimiento dinámico).
+
+    Parámetros:
+    df_funds_bmrk (DataFrame): Mapeo de Tickers y sus Benchmarks asociados.
+    returns_bmrk (DataFrame): Matriz global de retornos de benchmarks.
+    fecha_fin (datetime): Fecha de corte para el reporte.
+
+    Retorna:
+    DataFrame: Matriz donde cada columna es el benchmark correspondiente a ese fondo.
     """
     all_bmrk_mapped = pd.DataFrame(index=returns_bmrk.index)
     
@@ -502,9 +582,19 @@ def bmrk_aux_funds(df_funds_bmrk, returns_bmrk, fecha_fin):
 @st.cache_data
 def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
     """
-    Genera los precios de los portafolios combinando:
-    1. Precios fijos históricos (Hoja 'Portfolio Prices').
-    2. Cálculo dinámico (Suma Producto) con nominales variables (Hoja 'Nominals').
+    Genera la serie de precios histórica de los portafolios (Standard y Combo).
+
+    Combina precios históricos fijos con un cálculo dinámico basado en 
+    unidades nominales. Soporta jerarquía de "portafolio de portafolios",
+    pero no aplica ya que no es requerido para la herramienta.
+
+    Parámetros:
+    df_prices_funds (DataFrame): Precios de los fondos subyacentes.
+    df_fixed_portfolios (DataFrame): Precios históricos precargados.
+    df_nominals (DataFrame): Unidades nominales por activo y fecha.
+
+    Retorna:
+    DataFrame: Matriz de precios final para todos los portafolios calculados.
     """
     dict_portfolios_px = {}
 
@@ -574,6 +664,20 @@ def portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals):
     return df_final_px
 
 def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
+    """
+    Crea una gráfica comparativa estilizada entre el portafolio y su benchmark.
+
+    Aplica una interpolación (spline) para suavizar las líneas y configura 
+    estéticamente los ejes y leyendas según el perfil del portafolio (6, 7 u 8).
+
+    Parámetros:
+    df_port (Series): Retornos acumulados del portafolio.
+    df_bmrk (Series): Retornos acumulados del benchmark.
+    nombre_port (str): Ticker del portafolio para determinar el título.
+
+    Retorna:
+    BytesIO: Buffer de imagen en formato PNG.
+    """
     plt.switch_backend('Agg')
     fecha=pd.to_datetime(df_port.index[-1])
 
@@ -661,6 +765,22 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
 def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_prices,
                 allocation,port,prices,img_buffer,
                 df_ocw,df_dfaf,start_dt_ocw,start_dt_dfaf):
+    """
+    Genera un reporte profesional en Excel con el resumen del portafolio.
+
+    Construye una hoja de cálculo con formatos financieros, tablas de 
+    rendimiento YTD, desglose de fondos alternativos e inserta el gráfico 
+    comparativo generado previamente.
+
+    Parámetros:
+    large_name_port (dict): Mapeo de Tickers a nombres largos.
+    cols_name (list): Lista de fondos a incluir en la tabla principal.
+    total_portafolio (float): Rendimiento acumulado total del portafolio.
+    ... (otros parámetros): Precios de inicio, fin, alocación e imágenes.
+
+    Retorna:
+    bytes: Contenido del archivo Excel listo para descargar.
+    """
     
     output = io.BytesIO()
     
@@ -840,6 +960,11 @@ def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_p
 # -- Funciones de crear excel de las fondos --
 @st.cache_data
 def formato_santander(funds_cmmdty):
+    """
+    Genera un archivo Excel con el diseño institucional de Santander.
+    Configura métricas para los fondos Nabucco y Turandot en una estructura 
+    de filas paralelas con tramas decorativas y formatos de porcentaje/numéricos.
+    """
     output = io.BytesIO()
 
     options = {'nan_inf_to_errors': True}
@@ -908,6 +1033,11 @@ def formato_santander(funds_cmmdty):
 
 @st.cache_data
 def formato_bbva(funds_cmmdty):
+    """
+    Crea un reporte Excel con el estilo de BBVA, incluyendo dos hojas: 
+    'BBVA Risk Metricks' para visualización directa e 'inputs' para carga de datos.
+    Incluye campos específicos para la duración de los fondos Strategic y Absolute.
+    """
     output = io.BytesIO()
     
     options = {'nan_inf_to_errors': True}
@@ -1039,6 +1169,10 @@ def formato_bbva(funds_cmmdty):
 
 @st.cache_data
 def formato_morgan_stanley(funds_cmmdty):
+    """
+    Genera reportes individuales para los fondos de Morgan Stanley (Risk Control o Growth).
+    Adapta el nombre de la hoja y los títulos dinámicamente según el ticker procesado.
+    """
     output = io.BytesIO()
 
     options = {'nan_inf_to_errors': True}
@@ -1097,6 +1231,11 @@ def formato_morgan_stanley(funds_cmmdty):
 
 @st.cache_data
 def formato_rothschild(funds_cmmdty):
+    """
+    Construye un reporte bilingüe (Inglés/Español) con el formato detallado de Rothschild.
+    Organiza las métricas en secciones de Retorno, Riesgo y Riesgo/Retorno, 
+    e incluye resaltado en color (rojo/amarillo) para métricas críticas como Duration.
+    """
     output = io.BytesIO()
 
     options = {'nan_inf_to_errors': True}
@@ -1224,6 +1363,16 @@ def formato_rothschild(funds_cmmdty):
     return data
 
 def generar_excel_fondos(assets,fnds_cmmdty,fecha_fin,periodo):
+    """
+    Orquestador que identifica qué entidades financieras están presentes en la 
+    selección de activos y dispara la generación de sus reportes específicos.
+
+    Parámetros:
+    assets (list): Tickers seleccionados por el usuario.
+    fnds_cmmdty (DataFrame): Tabla de estadísticas (KPIs) calculadas.
+    fecha_fin (datetime): Fecha final del reporte para el nombre del archivo.
+    periodo (str): Periodo analizado (ej. YTD, MTD).
+    """
     if assets is None:
         assets = []
 
@@ -1268,6 +1417,16 @@ def generar_excel_fondos(assets,fnds_cmmdty,fecha_fin,periodo):
                     pass
 
 def crear_boton(nombre, data,fecha_fin=None,periodo=None):
+    """
+    Genera un componente st.download_button estandarizado en la interfaz de Streamlit.
+
+    Centraliza la lógica de nombrado de archivos y asignación de tipos MIME 
+    para asegurar que las descargas de Excel (.xlsx) funcionen correctamente.
+
+    Parámetros:
+    nombre (str): Nombre del banco o fondo para la etiqueta del botón.
+    data (bytes): Contenido del archivo Excel en memoria (buffer).
+    """
     st.download_button(
         label=f"Download Report {nombre}",
         data=data,

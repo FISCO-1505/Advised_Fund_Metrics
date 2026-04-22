@@ -5,9 +5,16 @@ import streamlit as st
 
 @st.cache_data
 def df_returns(prices):
-    '''
-    Calcula retornos manteniendo los NaNs originales de la matriz de precios.
-    '''
+    """
+    Calcula retornos porcentuales manteniendo la posición de los NaNs originales.
+
+    Parámetros:
+    prices (DataFrame): Matriz de precios.
+
+    Retorna:
+    DataFrame: Retornos calculados a partir de la segunda fila.
+    Serie: Última fecha con datos válidos para cada activo.
+    """
     returns = prices.ffill().pct_change()
     returns = returns.mask(prices.isna())
     fechas_reales=returns.apply(lambda x: x.last_valid_index())
@@ -17,7 +24,14 @@ def df_returns(prices):
 @st.cache_data
 def cumm_return(returns,fecha_fin=None):
     """
-    returns: Series with returns
+    Calcula el retorno acumulado histórico o a una fecha límite
+
+    Parámetros:
+    returns (DataFrame): Dataframe de retornos.
+    fecha_fin (str/datetime, opcional): Fecha de corte para obtener solo el retorno total.
+
+    Retorna:
+    DataFrame: Serie de retornos acumulados o el resultado final transpuesto del dataframe.
     """
     df_cumm=((1+returns).cumprod() - 1)
 
@@ -32,9 +46,16 @@ def cumm_return(returns,fecha_fin=None):
 
 @st.cache_data
 def RF(df_prices, fecha_fin=None):
-    '''
-    df_prices: DataFrame que ya contiene la columna 'USGG3M Index' filtrada.
-    '''
+    """
+    Calcula la tasa libre de riesgo (Risk-Free) promedio acumulada.
+
+    Parámetros:
+    df_prices (DataFrame): Datos que incluyen la columna 'USGG3M Index'.
+    fecha_fin (opcional): No se utiliza actualmente en el cálculo, pero se mantiene por consistencia.
+
+    Retorna:
+    Series: Promedio expansivo del índice USGG3M expresado en decimales.
+    """
 
     rf_expanding = df_prices['USGG3M Index'].expanding().mean()
     
@@ -43,10 +64,16 @@ def RF(df_prices, fecha_fin=None):
 
 @st.cache_data
 def rolling_vol(returns, fechas_reales):
-    '''
-    returns: DataFrame de retornos (con NaNs).
-    fechas_reales: Serie con la última fecha válida por fondo.
-    '''
+    """
+    Calcula la volatilidad anualizada expandida basada en la última fecha válida de cada activo.
+
+    Parámetros:
+    returns (DataFrame): Dataframe de retornos.
+    fechas_reales (Series): Serie que contiene la última fecha de datos para cada columna.
+
+    Retorna:
+    DataFrame: Un renglón con la volatilidad anualizada (Vol) calculada para cada activo.
+    """
     # vol de toda la matriz
     vol_full = returns.expanding().std() * np.sqrt(252)
     # 2. Extraemos el valor solo si la fecha existe y es válida
@@ -63,12 +90,18 @@ def rolling_vol(returns, fechas_reales):
 
 @st.cache_data
 def sharpe_ratio(returns, rf_series, vol_df, fechas_reales):
-    '''
-    returns: DataFrame de retornos (con NaNs).
-    rf_series: La serie devuelta por la función RF.
-    vol_df: El DataFrame devuelto por rolling_vol.
-    fechas_reales: Serie con la última fecha válida por fondo.
-    '''
+    """
+    Calcula el Sharpe Ratio anualizado.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los activos.
+    rf_series (Series): Tasa libre de riesgo (RF) calculada.
+    vol_df (DataFrame): Volatilidad anualizada calculada.
+    fechas_reales (Series): Última fecha válida por activo.
+
+    Retorna:
+    DataFrame: El ratio Sharpe por activo en una sola fila.
+    """
     avg_daily = returns.mean()
     
     ann_return = ((1 + avg_daily)**252) - 1
@@ -96,9 +129,16 @@ def sharpe_ratio(returns, rf_series, vol_df, fechas_reales):
 
 @st.cache_data
 def downside_deviation(negative_returns, fechas_reales):
-    '''
-    Calcula la desviación a la baja anualizada de forma vectorizada.
-    '''
+    """
+    Calcula la desviación estándar de los retornos negativos (anualizada).
+
+    Parámetros:
+    negative_returns (DataFrame): Dataframe que solo contiene retornos menores a cero.
+    fechas_reales (Series): Última fecha válida por activo.
+
+    Retorna:
+    DataFrame: La desviación a la baja (Downside Deviation) por activo.
+    """
     downside_returns = negative_returns
 
     dd_full = np.sqrt((downside_returns**2).expanding().mean()) * np.sqrt(252)
@@ -112,16 +152,30 @@ def downside_deviation(negative_returns, fechas_reales):
 
 @st.cache_data
 def negative_returns(returns):
-    '''
-    Retorna el DataFrame original pero solo con los valores negativos (el resto NaN).
-    '''
+    """
+    Filtra la matriz de retornos para obetener solo los valores negativos.
+
+    Parámetros:
+    returns (DataFrame): Dataframe original de retornos.
+
+    Retorna:
+    DataFrame: Misma estructura que la entrada, pero con NaN en los valores positivos.
+    """
     return returns[returns < 0]
 
 @st.cache_data
 def VaR(returns, fechas_reales, conf_lvl=99):
-    '''
-    Calcula el VaR Histórico (Percentil) de forma vectorizada.
-    '''
+    """
+    Calcula el Valor en Riesgo (VaR) histórico mediante el método de percentiles.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los activos.
+    fechas_reales (Series): Última fecha válida por activo.
+    conf_lvl (int): Nivel de confianza (por defecto 99%).
+
+    Retorna:
+    DataFrame: El VaR histórico correspondiente al nivel de confianza.
+    """
     alpha = 1 - (conf_lvl / 100)
     
     # Calculamos el cuantil expansivo para toda la matriz
@@ -136,6 +190,18 @@ def VaR(returns, fechas_reales, conf_lvl=99):
 
 @st.cache_data
 def Sortino(returns, rf_series, dd_df, fechas_reales):
+    """
+    Calcula el Sortino Ratio.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los activos.
+    rf_series (Series): Tasa libre de riesgo (RF) calculada.
+    dd_df (DataFrame): Desviación a la baja calculada.
+    fechas_reales (Series): Última fecha válida por activo.
+
+    Retorna:
+    DataFrame: El ratio Sortino por activo.
+    """
     avg_daily = returns.mean()
     ann_return = ((1 + avg_daily)**252) - 1
     
@@ -148,6 +214,17 @@ def Sortino(returns, rf_series, dd_df, fechas_reales):
     
 @st.cache_data
 def Beta(returns, returns_bmrk, fechas_reales=None):
+    """
+    Calcula la Beta de cada activo respecto a su benchmark de referencia.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los activos.
+    returns_bmrk (DataFrame): Retornos del benchmark.
+    fechas_reales (Series, opcional): Última fecha para delimitar el cálculo.
+
+    Retorna:
+    DataFrame: La Beta (sensibilidad) calculada para cada activo.
+    """
     beta_values = {}
     
     for col in returns.columns:
@@ -173,10 +250,15 @@ def Beta(returns, returns_bmrk, fechas_reales=None):
 
 @st.cache_data
 def Alpha(df_cumm, beta_df, bmrk_cumm, fechas_reales):
-    '''
-    Calcula el Alpha: Retorno acumulado del fondo - (Beta * Retorno acumulado Benchmark).
-    Considera los valores acumulados en la fecha de corte específica de cada fondo.
-    '''
+    """
+    Calcula el Alpha: Retorno acumulado del fondo - (Beta * Retorno acumulado Benchmark). 
+
+    Parámetros:
+    df_cumm (DataFrame): Retornos acumulados de los fondos.
+    beta_df (DataFrame): Betas calculadas previamente.
+    bmrk_cumm (DataFrame): Retornos acumulados del benchmark.
+    fechas_reales (Series): Última fecha válida por activo.
+    """
     alpha_values = {}
     betas = beta_df.iloc[0]
     
@@ -197,10 +279,17 @@ def Alpha(df_cumm, beta_df, bmrk_cumm, fechas_reales):
 
 @st.cache_data
 def J_Alpha(returns, rf_series, beta_df, returns_bmrk, fechas_reales):
-    '''
-    Calcula el Jensen's Alpha anualizado:
+    """
+    Calcula el Alpha de Jensen anualizado ajustado por riesgo (CAPM).
     J_Alpha = R_anualizado - [RF + Beta * (R_bmrk_anualizado - RF)]
-    '''
+
+    Parámetros:
+    returns (DataFrame): Retornos diarios de los fondos.
+    rf_series (Series): Tasa libre de riesgo (RF).
+    beta_df (DataFrame): Betas de los activos.
+    returns_bmrk (DataFrame): Retornos diarios del benchmark.
+    """
+
     j_alpha_values = {}
     betas = beta_df.iloc[0]
     
@@ -232,6 +321,15 @@ def J_Alpha(returns, rf_series, beta_df, returns_bmrk, fechas_reales):
 
 @st.cache_data
 def Treynor_ratio(returns, rf_series, beta_df, fechas_reales):
+    """
+    Mide el retorno excedente por cada unidad de riesgo sistemático (Beta).
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    rf_series (Series): Tasa libre de riesgo.
+    beta_df (DataFrame): Betas calculadas.
+    fechas_reales (Series): Última fecha válida.
+    """
     avg_daily = returns.mean()
     ann_return = ((1 + avg_daily)**252) - 1
     rf_vals = pd.Series({c: rf_series.loc[fechas_reales[c]] if pd.notnull(fechas_reales[c]) else np.nan for c in returns.columns})
@@ -242,10 +340,13 @@ def Treynor_ratio(returns, rf_series, beta_df, fechas_reales):
 
 @st.cache_data
 def daily_active_returns(returns, returns_bmrk, fechas_reales=None):
-    '''
-    Calcula la matriz de retornos activos diarios (Fondo - Benchmark)
-    alineando calendarios y tratando los NaNs como 0.
-    '''
+    """
+    Genera la serie de tiempo de retornos activos (Fondo - Benchmark).
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    returns_bmrk (DataFrame): Retornos del benchmark.
+    """
     active_returns_dict = {}
 
     for col in returns.columns:
@@ -267,9 +368,17 @@ def daily_active_returns(returns, returns_bmrk, fechas_reales=None):
 
 @st.cache_data
 def Tracking_Error(returns, returns_bmrk, fechas_reales=None):
+    """
+    Calcula el Tracking Error: Calcula la volatilidad anualizada de los retornos activos (error de seguimiento).
+    std(daily_active_rtrns)*sqrt(252)
+    Usa fillna(0) para el caso de los retornos diarios.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    returns_bmrk (DataFrame): Retornos del benchmark.
+    """
     '''
-    Calcula el Tracking Error: std(daily_active_rtrns)*sqrt(252).
-    Usa fillna(0) para el caso de los daily active returns.
+    
     '''
 
     te_values = {}
@@ -299,9 +408,18 @@ def Tracking_Error(returns, returns_bmrk, fechas_reales=None):
 
 @st.cache_data
 def info_ratio(returns, returns_bmrk, df_te, fechas_reales=None):
+    """
+    Calcula el Information Ratio: Mide la capacidad del gestor para generar retornos excedentes sobre el Tracking Error.
+    (Retorno Activo Anualizado) / Tracking Error. Usa fillna(0) para que el retorno activo sea consistente con el TE calculado.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    returns_bmrk (DataFrame): Retornos del benchmark.
+    df_te (DataFrame): Tracking Error calculado.
+    """
     '''
-    Calcula el Information Ratio: (Retorno Activo Anualizado) / Tracking Error.
-    Usa fillna(0) para que el retorno activo sea consistente con el TE calculado.
+    
+    
     '''
     ir_values = {}
     
@@ -328,10 +446,13 @@ def info_ratio(returns, returns_bmrk, df_te, fechas_reales=None):
 
 @st.cache_data
 def correlation(returns, returns_bmrk, fechas_reales=None):
-    '''
-    Calcula la correlación de Pearson considerando la historia real 
-    de cada fondo
-    '''
+    """
+    Calcula el coeficiente de correlación de Pearson respecto al benchmark.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los activos.
+    returns_bmrk (DataFrame): Retornos del benchmark.
+    """
     corr_values = {}
     
     for col in returns.columns:
@@ -351,9 +472,13 @@ def correlation(returns, returns_bmrk, fechas_reales=None):
 
 @st.cache_data
 def Drawdown(returns, fechas_reales):
-    '''
-    Calcula el Drawdown actual (en la fecha real) respecto al máximo histórico previo.
-    '''
+    """
+    Calcula el Drawdown: la caída porcentual actual desde el máximo histórico alcanzado.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    fechas_reales (Series): Fecha de corte para evaluar el nivel actual.
+    """
     serie_precios = (1 + returns).cumprod()
     previous_pick = serie_precios.cummax()
 
@@ -374,9 +499,13 @@ def Drawdown(returns, fechas_reales):
 
 @st.cache_data
 def Max_Drawdown(returns, fechas_reales):
-    '''
-    Calcula la caída máxima histórica (el punto más bajo del drawdown) de forma segura.
-    '''
+    """
+    Calcula el Max Drowdown: Identifica la caída máxima (peor racha de pérdidas) en el periodo analizado.
+
+    Parámetros:
+    returns (DataFrame): Retornos de los fondos.
+    fechas_reales (Series): Fecha límite para la búsqueda histórica.
+    """
     
     serie_precios = (1 + returns).cumprod()
     previous_pick = serie_precios.cummax()
