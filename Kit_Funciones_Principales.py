@@ -33,10 +33,10 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
 
     #ffill para ocw y dfaf con mask de welstg
     df_prices_all['OCWHAUA LX Equity'] = df_prices_all['OCWHAUA LX Equity'].ffill()
-    df_prices_all['OCWHAUA LX Equity'] = df_prices_all['OCWHAUA LX Equity'].mask(df_prices_all['WELSTGD SW EQUITY'].isna())
+    # df_prices_all['OCWHAUA LX Equity'] = df_prices_all['OCWHAUA LX Equity'].mask(df_prices_all['WELSTGD SW EQUITY'].isna())
     
     df_prices_all['FDAF'] = df_prices_all['FDAF'].ffill()
-    df_prices_all['FDAF'] = df_prices_all['FDAF'].mask(df_prices_all['WELSTGD SW EQUITY'].isna())
+    # df_prices_all['FDAF'] = df_prices_all['FDAF'].mask(df_prices_all['WELSTGD SW EQUITY'].isna())
     
     # Benchmarks
     returns_bmrk_pure, _, _ = kit_f_secundarias.calculus_bmrk(_data)
@@ -73,12 +73,13 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     #precios para el cálculo de los retornos
     prices_to_returns = df_prices_all.loc[:fecha_fin]
     returns_2,fechas_reales = kit_metricas.df_returns(prices_to_returns)
-
     #precios filtrados para graficar
     prices = df_prices_all.loc[fecha_inicio:fecha_fin]
 
     returns = returns_2.loc[fecha_inicio: fecha_fin]
-    
+    #Para el caso de ocw y dfaf solo se quedan con los valareos donde las fechs coincidan 
+    returns['OCWHAUA LX Equity'] = returns['OCWHAUA LX Equity'].where(df_ocw["OCWHAUA LX Equity"].notna())
+    returns['FDAF'] = returns['FDAF'].where(df_dfaf["FDAF"].notna())
     returns_z=returns.fillna(0)
     returns_aux = returns_aux_all.loc[fecha_inicio:fecha_fin]
      
@@ -212,10 +213,10 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
 
     #ffill para ocw y dfaf con mask de welstg
     df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].ffill()
-    df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
+    # df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
     
     df_prices_funds['FDAF'] = df_prices_funds['FDAF'].ffill()
-    df_prices_funds['FDAF'] = df_prices_funds['FDAF'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
+    # df_prices_funds['FDAF'] = df_prices_funds['FDAF'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
     
 
     df_fixed_portfolios = _data['Portfolio Prices'].set_index('Date')
@@ -252,6 +253,10 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
 
     returns,fechas_reales = kit_metricas.df_returns(prices_to_returns)
     returns = returns.loc[fecha_inicio:fecha_fin]
+
+    # #Para el caso de ocw y dfaf solo se quedan con los valareos donde las fechs coincidan 
+    # returns['OCWHAUA LX Equity'] = returns['OCWHAUA LX Equity'].where(df_ocw["OCWHAUA LX Equity"].notna())
+    # returns['FDAF'] = returns['FDAF'].where(df_dfaf["FDAF"].notna())
     prices = df_prices_all.loc[fecha_inicio:fecha_fin]
 
     #returns con NaN para el cálculo de las métricas
@@ -405,7 +410,16 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
 
             st.dataframe(final_df.style.format(formatos, na_rep="-"))
             
-            if topic == "Funds":
+            # si los assets y stats coinciden con las siguientes lsitas se mostrarán los botones para generar los reportes
+            list_mngr_fnds = ["BENIDUI Equity", "BELICUS Equity", "RWMWICU Equity", "BBSALIU Equity",
+                            "BBAGTIU Equity", "MSHRCZU Equity", "MSHZUSD Equity"]
+
+            list_mngr_stats=["Cumulative","Vol", "Sharpe Ratio","VaR",
+                                  'Treynor Ratio','Sortino Ratio','Info. Ratio',
+                                  'Tracking Error', 'Beta','Correlation',
+                                  'R^2','Max. Drawdown']
+
+            if topic == "Funds" and list_mngr_fnds == assets and list_mngr_stats == stats:
                 # Generar excel
                 kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
                 st.success("You can download the Reports!")
@@ -445,10 +459,10 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
 
     #ffill para ocw y dfaf con mask de welstg
     df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].ffill()
-    df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
+    # df_prices_funds['OCWHAUA LX Equity'] = df_prices_funds['OCWHAUA LX Equity'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
     
     df_prices_funds['FDAF'] = df_prices_funds['FDAF'].ffill()
-    df_prices_funds['FDAF'] = df_prices_funds['FDAF'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
+    # df_prices_funds['FDAF'] = df_prices_funds['FDAF'].mask(df_prices_funds['WELSTGD SW EQUITY'].isna())
     
 
     df_fixed_portfolios = _data['Portfolio Prices'].set_index('Date')
@@ -580,3 +594,28 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"Reporte_{port}")
         
+def bmrk_process(_data,end_date):
+    #returns de los benchamrks
+    returns_bmrk, _, _ = kit_f_secundarias.calculus_bmrk(_data)
+    # Read data
+    df_info=_data["Info_aux"]
+    
+    #se filtra los retornos solo de los benchmarks que están la hoja de info_aux
+    returns_bmrk = returns_bmrk[df_info["Benchmark"].tolist()]
+
+    # Dictionary with benchmarks results
+    dict_results = {}
+    for bmk in returns_bmrk.keys():
+        fecha_inicio=df_info.loc[df_info["Benchmark"]==bmk,"Start"].values[0]
+        dict_results[bmk] = kit_f_secundarias.returns_table_bmrk(returns_bmrk[bmk],end_date,fecha_inicio, name=bmk)
+    
+    # Create excel
+    data_excel = kit_f_secundarias.create_excel_bmrk(dict_results, end_date, df_info)
+
+    # boton de descarga
+    st.download_button(
+        label=f"Download Report",
+        data=data_excel,
+        file_name=f"Monthly Returns_{end_date}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="Reporte_bmrk")

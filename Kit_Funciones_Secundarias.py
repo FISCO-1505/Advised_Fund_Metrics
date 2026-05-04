@@ -3,6 +3,8 @@ import streamlit as st
 import plotly.express as px
 import matplotlib.pyplot as plt
 import io
+import datetime as dt
+import calendar as cd
 
 # librerias para el gráfico
 import matplotlib.dates as mdates
@@ -1434,3 +1436,167 @@ def crear_boton(nombre, data,fecha_fin=None,periodo=None):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key=f"btn_{nombre}"
     )
+
+# -- Funciones para el proceso de Benchmarks --
+st.cache_data
+def start_date(end_date, n_months=1, YTD=False):
+    # Get n_months for YTD
+    if YTD:
+        n_months = end_date.month
+    
+    # Create date
+    _date = dt.date(end_date.year, end_date.month, 28)
+    # Substract days to change month
+    new_date = _date - dt.timedelta(days=31*n_months)
+    # Create new date
+    start_date = dt.date(new_date.year, 
+                         new_date.month, 
+                         cd.monthrange(new_date.year, new_date.month)[-1])
+    return pd.to_datetime(start_date)
+
+st.cache_data
+def returns_table_bmrk(df_returns, end_date, start_date_SI, name):
+    # Get start dates for returns
+    end_date = pd.to_datetime(end_date)
+    start_date_SI = pd.to_datetime(start_date_SI)
+
+    start_1M = start_date(end_date, n_months=1)
+    start_3M = start_date(end_date, n_months=3)
+    start_6M = start_date(end_date, n_months=6)
+    start_12M = start_date(end_date, n_months=12)
+    start_YTD = start_date(end_date, YTD=True)
+
+    # List of start dates
+    start_list = [start_1M, start_3M, start_6M, start_12M, start_YTD]
+    
+    # Calculate cum return
+    return_1M = (1+df_returns.loc[(df_returns.index > start_1M) & (df_returns.index <= end_date)]).prod() - 1
+    return_3M = (1+df_returns.loc[(df_returns.index > start_3M) & (df_returns.index <= end_date)]).prod() - 1
+    return_6M = (1+df_returns.loc[(df_returns.index > start_6M) & (df_returns.index <= end_date)]).prod() - 1
+    return_12M = (1+df_returns.loc[(df_returns.index > start_12M) & (df_returns.index <= end_date)]).prod() - 1
+    return_YTD = (1+df_returns.loc[(df_returns.index > start_YTD) & (df_returns.index <= end_date)]).prod() - 1
+    return_SI = (1+df_returns.loc[:end_date]).prod() - 1
+
+    # Format results
+    results = [return_1M, return_3M, return_6M, return_12M, return_YTD, return_SI]
+    results = [f"{x*100:,.4f}" for x in results]
+    df_results =  pd.DataFrame(data=[results],
+                               columns=["1M", "3M", "6M", "12M", "YTD", "SI"],
+                               index=[name])
+
+    # Return start dates and dataframe
+    return dict({"start_dates": start_list,
+                 "results": df_results})
+
+st.cache_data
+def create_excel_bmrk(dict_results, end_date, df_bmk_info):
+    """
+    Function to write excel with benchmark returns
+    * dict_results: dict with returns of benchmarks
+    * end_date: date with date to calculate
+    * df_bmk_info: Dataframe with benchmarks info
+    """
+
+    output = io.BytesIO()
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
+        workbook = writer.book
+    
+        # Create sheet
+        worksheet = workbook.add_worksheet("Benchmarks")
+
+        # Formats
+        format_returns = workbook.add_format({"num_format": '0.0000', "font_name":"Lato Light",
+                                            "align":"right", "valign":"vcenter",
+                                            "font_size":10, "font_color":"#1F4E78"
+                                            })
+        format_dates = workbook.add_format({"num_format": 'dd/mm/yyyy', "font_name":"Calibri",
+                                            "font_size":11,
+                                            "align":"center", "valign":"vcenter",
+                                            "italic":True, "font_color":"#BFBFBF"
+                                        })
+        format_current_date = workbook.add_format({"num_format": 'mmm-yy', "font_name":"Calibri",
+                                                "font_size":11, "bold":True,
+                                                "align":"center", "valign":"vcenter"
+                                                })
+        format_headers = workbook.add_format({"font_name":"Calibri", "font_size":11,
+                                            "bold":True, "top":1,
+                                            "align":"center", "valign":"vcenter"
+                                            })
+        format_title =  workbook.add_format({"font_name":"Calibri", "font_size":11,
+                                            "bold":True, "top":1,
+                                            "align":"left", "valign":"vcenter"
+                                            })
+        format_subtitle =  workbook.add_format({"font_name":"Lato Light", "font_size":10,
+                                                "align":"left", "valign":"vcenter"
+                                            })
+        format_note = workbook.add_format({"font_name":"Lato Light", "font_size":10,
+                                        "align":"left", "valign":"vcenter", 
+                                        "italic":True, "text_wrap":True
+                                        })
+
+        # Set columns width
+        worksheet.set_column(0,0, width=24.29)
+        worksheet.set_column(1,6, width=10.86)
+        
+        # Set start row to write
+        start_row = 3
+        # Iterate benchmarks and write data
+        for i in df_bmk_info.index:
+            # Get values to write
+            title = df_bmk_info.loc[i]["Title"]
+            subtitle = df_bmk_info.loc[i]["Subtitle"]
+            note = df_bmk_info.loc[i]["Comment"]
+            benchmark = df_bmk_info.loc[i]["Benchmark"]
+            start_dates = dict_results[benchmark]["start_dates"]
+            returns = dict_results[benchmark]["results"]
+
+            # Append start date
+            start_dates.append(df_bmk_info.loc[i]["Start"])
+            
+            # Write current date
+            worksheet.write(start_row, 0, end_date, format_current_date)
+            # Write dates
+            worksheet.write_row(start_row, 1, start_dates, format_dates)
+            # Write headers
+            worksheet.write_row(start_row+1, 1, returns.columns, format_headers)
+            # Write title
+            worksheet.write_string(start_row+1, 0, title, format_title)
+            # Write Subtitle
+            worksheet.write_string(start_row+2, 0, subtitle, format_subtitle)
+            # Write returns
+            worksheet.write_row(start_row+2, 1, returns.values.flatten(), format_returns)
+            # Merge and write comment
+            if pd.isna(note):
+                start_row += 5
+                continue
+            worksheet.merge_range(start_row+4,0, start_row+5,6, note, format_note)
+
+            start_row += 8
+            
+        # # Close workbook
+        # workbook.close()
+
+    #Extraer los datos del buffer
+    data = output.getvalue()
+    return data
+
+st.cache_data
+def date_bmrk_process(_data):
+    # Get min and max price date
+    df_prices = _data["Prices"].set_index('Date')
+    # df_prices = df_prices.dropna()
+    max_date = pd.to_datetime(df_prices.index.max())
+    min_date = pd.to_datetime(df_prices.index.min())
+
+    # If max date is last month day do nothing
+    if max_date.day == max_date.daysinmonth:
+        pass
+    # If max date is friday go till sunday, but
+    elif max_date.weekday() == 4:
+        max_date = max_date + pd.Timedelta(days=2)
+        # If new max date is next month go back 1 day
+        if max_date.day == 1:
+            max_date = max_date - pd.Timedelta(days=1)
+
+    return max_date, min_date
