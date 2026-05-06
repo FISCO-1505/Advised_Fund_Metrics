@@ -41,22 +41,26 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
             return "MISSING CUSTOM DATE"
         
         start_date = pd.to_datetime(custom_start)
+        start_date_anlisis = start_date
         #cosniderar que se debe de ir un dia hanil hacia atras
         
     elif period == "MTD":
         start_date = pd.Timestamp(year=end_dt.year, month=end_dt.month, day=1)#(end_dt.replace(day=1) - pd.Timedelta(days=1))
+        start_date_anlisis = start_date - pd.Timedelta(days=1)
         
     elif period == "YTD":
         start_date = pd.Timestamp(year=end_dt.year, month=1, day=1)
+        start_date_anlisis = start_date - pd.Timedelta(days=1)
         
     elif period == "1Y":
         start_date = end_dt - pd.DateOffset(years=1) +  pd.Timedelta(days=1)
+        start_date_anlisis = start_date - pd.Timedelta(days=1)
         
     
     if start_date < min_dt:
         return "INSUFFICIENT_DATA"
 
-    return start_date
+    return start_date, start_date_anlisis
 
 @st.cache_resource(show_spinner=False)
 def cargar_datos_excel(_file):

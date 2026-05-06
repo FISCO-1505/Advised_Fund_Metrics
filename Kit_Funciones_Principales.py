@@ -43,7 +43,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     returns_aux_all = kit_f_secundarias.bmrk_aux_funds(_data['Funds - BMRK'], returns_bmrk_pure, fecha_fin)
 
     # Definición de Fecha de Inicio según Periodicidad
-    fecha_inicio_aux = kit_f_secundarias.start_dt(fecha_fin, periodicity,c_d)
+    fecha_inicio_aux,fecha_inicio_analisis = kit_f_secundarias.start_dt(fecha_fin, periodicity,c_d)
 
     if fecha_inicio_aux == "INSUFFICIENT_DATA":
         st.warning(f"Insufficient historical data for {periodicity}. "
@@ -54,16 +54,16 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
         if periodicity == 'Since Inception':
 
             fecha_inicio = df_prices.index.min()
+            fecha_inicio_analisis = fecha_inicio
 
         else:
 
             idx_start = df_prices.index.get_indexer([fecha_inicio_aux], method='backfill')[0]
-            idx_start_prices = df_prices.index.get_indexer([fecha_inicio_aux], method='pad')[0]
             fecha_inicio = df_prices.index[idx_start]
             # fecha_inicio_precios = df_prices.index[idx_start_proces]
 
         
-        st.success(f"Analysis period: {fecha_inicio.date()} to {pd.to_datetime(fecha_fin).date()}")
+        st.success(f"Analysis period: {fecha_inicio_analisis.date()} to {pd.to_datetime(fecha_fin).date()}")
 
 
     #recorte del periodo seleccionado
@@ -91,7 +91,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     df_cumm_full = kit_metricas.cumm_return(returns_z) 
     df_rf_full = kit_metricas.RF(df_prices_RF)
     df_neg_full = kit_metricas.negative_returns(returns)
-
+    st.dataframe(fechas_reales)
     # Metricas de riesgo y desempeño
     df_vol_full = kit_metricas.rolling_vol(returns, fechas_reales) 
     df_sharpe_full = kit_metricas.sharpe_ratio(returns, df_rf_full, df_vol_full, fechas_reales)
@@ -226,7 +226,7 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
     df_prices_all=kit_f_secundarias.portfolio_Prices(df_prices_funds,df_fixed_portfolios,df_nominals)
 
     # Definición de Fecha de Inicio según Periodicidad
-    fecha_inicio_aux = kit_f_secundarias.start_dt(fecha_fin, periodicity,c_d)
+    fecha_inicio_aux,fecha_inicio_analisis = kit_f_secundarias.start_dt(fecha_fin, periodicity,c_d)
 
     if fecha_inicio_aux == "INSUFFICIENT_DATA":
         st.warning(f"Insufficient historical data for {periodicity}. "
@@ -237,13 +237,14 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
         if periodicity == 'Since Inception':
 
             fecha_inicio = df_prices.index.min()
+            fecha_inicio_analisis = fecha_inicio
 
         else:
 
             idx_start = df_prices.index.get_indexer([fecha_inicio_aux], method='backfill')[0]
             fecha_inicio = df_prices.index[idx_start]
         
-        st.success(f"Analysis period: {fecha_inicio.date()} to {pd.to_datetime(fecha_fin).date()}")
+        st.success(f"Analysis period: {fecha_inicio_analisis.date()} to {pd.to_datetime(fecha_fin).date()}")
 
     #recorte del periodo seleccionado
     df_prices_RF=_data['Prices'].set_index('Date')
@@ -389,40 +390,44 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
         # ----------------------------
 
         with st.container():
-            func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
-            
-            if selection == "Custom Date":
-                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map, start_date)
-                periodo_excel=f"{start_date} to {selected_date}"
-                fecha_excel=None
+            try:
+                func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
+                
+                if selection == "Custom Date":
+                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map, start_date)
+                    periodo_excel=f"{start_date} to {selected_date}"
+                    fecha_excel=None
 
-            else:
-                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map)
-                periodo_excel="SI" if selection == "Since Inception" else selection
-                fecha_excel=selected_date
+                else:
+                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map)
+                    periodo_excel="SI" if selection == "Since Inception" else selection
+                    fecha_excel=selected_date
 
-            cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
-            final_df = results[cols_to_show].loc[assets]
-            
-            #se cambia el nombre de ticker al nombre del fondo en la tabla final
-            map_names = {v: k for k, v in ticker_map.items()}
-            final_df = final_df.rename(index=map_names)
+                cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
+                final_df = results[cols_to_show].loc[assets]
+                
+                #se cambia el nombre de ticker al nombre del fondo en la tabla final
+                map_names = {v: k for k, v in ticker_map.items()}
+                final_df = final_df.rename(index=map_names)
 
-            st.dataframe(final_df.style.format(formatos, na_rep="-"))
-            
-            # si los assets y stats coinciden con las siguientes lsitas se mostrarán los botones para generar los reportes
-            list_mngr_fnds = ["BENIDUI Equity", "BELICUS Equity", "RWMWICU Equity", "BBSALIU Equity",
-                            "BBAGTIU Equity", "MSHRCZU Equity", "MSHZUSD Equity"]
+                st.dataframe(final_df.style.format(formatos, na_rep="-"))
+                
+                # si los assets y stats coinciden con las siguientes lsitas se mostrarán los botones para generar los reportes
+                list_mngr_fnds = ["BENIDUI Equity", "BELICUS Equity", "RWMWICU Equity", "BBSALIU Equity",
+                                "BBAGTIU Equity", "MSHRCZU Equity", "MSHZUSD Equity"]
 
-            list_mngr_stats=["Cumulative","Vol", "Sharpe Ratio","VaR",
-                                  'Treynor Ratio','Sortino Ratio','Info. Ratio',
-                                  'Tracking Error', 'Beta','Correlation',
-                                  'R^2','Max. Drawdown']
+                list_mngr_stats=["Cumulative","Vol", "Sharpe Ratio","VaR",
+                                    'Treynor Ratio','Sortino Ratio','Info. Ratio',
+                                    'Tracking Error', 'Beta','Correlation',
+                                    'R^2','Max. Drawdown']
 
-            if topic == "Funds" and list_mngr_fnds == assets and list_mngr_stats == stats:
-                # Generar excel
-                kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
-                st.success("You can download the Reports!")
+                if topic == "Funds" and list_mngr_fnds == assets and list_mngr_stats == stats:
+                    # Generar excel
+                    kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
+                    st.success("You can download the Reports!")
+                    
+            except Exception as e:
+                st.error("There's a fund with no data for this periodicity selected")
 
 def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
     """
