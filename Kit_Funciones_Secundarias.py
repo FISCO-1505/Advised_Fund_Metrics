@@ -945,7 +945,7 @@ def crear_excel(large_name_port,cols_name,total_portafolio,start_prices, final_p
             worksheet.write(row_fecha, 6, f_max, format_date)
             worksheet.write(row_valor, 6, (p_max / p_min) - 1, format_pct_2)
 
-        worksheet.write(7+len(cols_name)+6,3,"Este fondo tiene NAV oficial trimestral proporcionado dentro de los 60 días posateriores al fin del trimestre.",format_text)
+        worksheet.write(7+len(cols_name)+6,3,"Este fondo tiene NAV oficial trimestral proporcionado dentro de los 60 días posteriores al fin del trimestre.",format_text)
         worksheet.write(7+len(cols_name)+10,3,"Este fondo tiene NAV diario.",format_text)
         worksheet.write(7+len(cols_name)+14,3,"Este fondo tiene NAV oficial mensual proporcionado dentro de los 15 días posteriores al fin de cada mes.",format_text)
 
