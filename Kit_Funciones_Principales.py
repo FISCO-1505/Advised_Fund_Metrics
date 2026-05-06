@@ -91,7 +91,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     df_cumm_full = kit_metricas.cumm_return(returns_z) 
     df_rf_full = kit_metricas.RF(df_prices_RF)
     df_neg_full = kit_metricas.negative_returns(returns)
-    st.dataframe(fechas_reales)
+
     # Metricas de riesgo y desempeño
     df_vol_full = kit_metricas.rolling_vol(returns, fechas_reales) 
     df_sharpe_full = kit_metricas.sharpe_ratio(returns, df_rf_full, df_vol_full, fechas_reales)
@@ -425,7 +425,7 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
                     # Generar excel
                     kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
                     st.success("You can download the Reports!")
-                    
+
             except Exception as e:
                 st.error("There's a fund with no data for this periodicity selected")
 
