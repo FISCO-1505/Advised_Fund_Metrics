@@ -736,7 +736,7 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     # ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=12)) 
 
     # Configuramos el localizador para que sea cada 2 días
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
     
     # Inclinación ligera de las fechas
     plt.setp(ax.get_xticklabels(), rotation=30, ha="right")
