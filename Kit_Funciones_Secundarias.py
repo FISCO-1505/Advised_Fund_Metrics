@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import io
 import datetime as dt
 import calendar as cd
+import matplotlib.font_manager as fm
+from importlib import resources
 
 # librerias para el gráfico
 import matplotlib.dates as mdates
@@ -687,6 +689,13 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
     plt.switch_backend('Agg')
     fecha=pd.to_datetime(df_port.index[-1])
 
+    # Lectura del archivo para tipografía 
+    ruta_font = resources.files("FISCO_Sources.Fonts").joinpath("Lato-Light.ttf")
+
+    prop_fuente = fm.FontProperties(fname=ruta_font)
+    fm.fontManager.addfont(ruta_font)
+    plt.rcParams['font.family'] = prop_fuente.get_name()
+
     if nombre_port[5:6] == "6":
         titulo = "Portafolio Conservador (Port-6)"
         subtitulo = f"{fecha.year} YTD"#cambiar a tomar la fecha año
@@ -743,13 +752,13 @@ def generar_grafico_linea_suave(df_port, df_bmrk, nombre_port):
 
     # 5. Colores de los ejes y etiquetas en Gris
     color_gris = '#666666'
-    ax.tick_params(axis='both', colors=color_gris, labelsize=9) # Números en gris
+    ax.tick_params(axis='both', colors=color_gris, labelsize=11) # Números en gris
     ax.spines['bottom'].set_color(color_gris) # Línea del eje X en gris
     ax.spines['left'].set_color(color_gris)   # Línea del eje Y en gris
 
     # Estética final
-    ax.set_title(f"{titulo} {subtitulo}", fontsize=11, fontweight='bold', color='#0073C6', pad=15)
-    ax.legend(loc='upper left', frameon=False, fontsize=9)
+    ax.set_title(f"{titulo} {subtitulo}", fontsize=14, fontweight='normal', color='#0073C6', pad=15)
+    ax.legend(loc='upper left', frameon=False, fontsize=11)
     
     
     # Quitar marcos innecesarios
