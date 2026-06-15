@@ -56,7 +56,7 @@ def contenido_principal():
         
             st.title(":blue[Select an option]")
 
-            topic = st.selectbox("Choose one:",["Funds", "Portfolio","Returns Table"],
+            topic = st.selectbox("Choose one:",["Funds", "Portfolio","Returns Table", "Monthly Returns"],
                                     label_visibility="collapsed"
                                     )
 
@@ -65,6 +65,12 @@ def contenido_principal():
                                         options=["Home", "YTD"],
                                         default="YTD"
                                 )
+            elif topic == "Monthly Returns":
+                selection = st.pills(label="Options", label_visibility="collapsed",
+                                        options=["Home", "Process"],
+                                        default="Process"
+                                )
+            
             else:
                 selection = st.pills(label="Options", label_visibility="collapsed",
                                         options=["Home", "MTD", "YTD","1Y",
@@ -130,6 +136,25 @@ def contenido_principal():
                         
                         kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers)
                         st.success("You can download the Reports!")
+
+                elif topic == "Monthly Returns":
+                    
+                    st.markdown("<h3 style='color: #1D59A9;'>Select Assets</h3>", unsafe_allow_html=True)
+                    all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                    assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
+
+                    #recuperar los assets con el nombre original (ticker)
+                    assets_tickers = [ticker_map[n] for n in assets]
+                    
+                    start_date, selected_date, real_end_date  = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="Year-Month")
+
+                    if not assets_tickers:
+                            st.warning("⚠️ Please select at least one asset/portfolio to continue.")
+                            return
+                    
+                    if st.button("Load Process", key="btn_monthly_rtrn"):
+                        
+                        kit_f_principales.monthly_returns_table(data, selected_date, assets, real_end_date, ticker_map, c_d=start_date)
 
 
             elif data is None and selection != "Home":

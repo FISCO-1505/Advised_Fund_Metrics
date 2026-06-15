@@ -624,3 +624,19 @@ def bmrk_process(_data,end_date):
         file_name=f"Monthly Returns_{end_date}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="Reporte_bmrk")
+
+def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, ticker_map=None,c_d=None):
+
+    def color_negativo_positivo(val):
+        color = "#000000" if val == 0 else ('#28A745' if val > 0 else '#DC3545')
+        return f'color: {color};'
+
+    fnds_cumm_ret = kit_f_secundarias.funds_port_cumm_rend(_data, fecha_fin, ticker_map, c_d=c_d)
+
+    #Aplicar el formato de porcentaje y el color
+    df_estilizado = fnds_cumm_ret.loc[assets_selected].style.format("{:.2%}").applymap(color_negativo_positivo)
+
+    st.dataframe(df_estilizado, width='stretch')
+
+    st.info(f"The final date is: {pd.to_datetime(real_end_date).strftime('%b %d, %Y')}")
+

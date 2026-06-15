@@ -7,6 +7,7 @@ import datetime as dt
 import calendar as cd
 import matplotlib.font_manager as fm
 from importlib import resources
+import Kit_Metricas as kit_metricas
 
 # librerias para el gráfico
 import matplotlib.dates as mdates
@@ -44,7 +45,7 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
         
         start_date = pd.to_datetime(custom_start)
         start_date_anlisis = start_date
-        #cosniderar que se debe de ir un dia hanil hacia atras
+        #cosniderar que se debe de ir un dia habil hacia atras
         
     elif period == "MTD":
         start_date = pd.Timestamp(year=end_dt.year, month=end_dt.month, day=1)#(end_dt.replace(day=1) - pd.Timedelta(days=1))
@@ -58,9 +59,8 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
         start_date = end_dt - pd.DateOffset(years=1) +  pd.Timedelta(days=1)
         start_date_anlisis = start_date - pd.Timedelta(days=1)
         
-    
     if start_date < min_dt:
-        return "INSUFFICIENT_DATA"
+        return "INSUFFICIENT_DATA" ,"Error"
 
     return start_date, start_date_anlisis
 
@@ -225,7 +225,7 @@ def assets_filter(topic, _data):
         # Para Returns Table solo mostramos Custom y All
         pills_options = [f"Custom {name}", f"All {name}"]
     else:
-        name = "Assets" if topic == "Funds" else "Portfolio"
+        name = "Assets" if topic in ["Funds", "Monthly Returns"] else "Portfolio"
         # Para los demás mostramos las 3 opciones
         pills_options = [f"Custom {name}", f"All {name}", f"Manager {name}"]
 
@@ -245,6 +245,11 @@ def assets_filter(topic, _data):
         df_filtered = _data[_data["Type"] == "Portfolio"]
     elif topic == "Returns Table":
         df_filtered = _data[(_data["Type"] == "Portfolio") & (_data['Ticker'].isin(["Port 6 (Conservative)","Port 7", "Port 8 (BALANCED GROWTH)"]))]
+    elif topic == "Monthly Returns":
+        df_filtered_funds = _data[(_data["Type"] == "Fund") | (_data['Type'] == 'Commodity')]
+        df_filtered_port = _data[_data["Type"] == "Portfolio"]
+        df_filtered = pd.concat([df_filtered_port,df_filtered_funds])
+
         
     
     # Mapeo y lista de nombres
@@ -388,6 +393,44 @@ def calendar(df, mode):
             return None, None
 
         return str(start_date), str(end_date)
+
+    elif mode == "Year-Month":
+        #Extraer los periodos (Año-Mes) únicos disponibles en el dataset
+        available_periods = sorted(list(set(d.strftime("%Y-%m") for d in available_dates)),reverse=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("<h3 style='color: #1D59A9;'>Select start month</h3>", unsafe_allow_html=True)
+            # Por defecto seleccionamos el primer periodo disponible
+            start_period = st.selectbox(
+                "Start Period",
+                options=available_periods,
+                index=1 if len(available_periods) > 1 else 0,
+                key="start_period_input",
+                label_visibility="collapsed"
+            )
+            
+        with col2:
+            st.markdown("<h3 style='color: #1D59A9;'>Select end month</h3>", unsafe_allow_html=True)
+            # Por defecto seleccionamos el último periodo disponible
+            end_period = st.selectbox(
+                "End Period",
+                options=available_periods,
+                index=0,
+                key="end_period_input",
+                label_visibility="collapsed"
+            )
+            
+        if start_period >= end_period:
+            st.error("❌ Error: Start month cannot be after or equal to end month.")
+            return None, None, None
+            
+        #Buscar la fecha real máxima para el periodo final seleccionado
+        dates_in_end_period = [d for d in available_dates if d.strftime("%Y-%m") == end_period]
+        real_end_date = max(dates_in_end_period) if dates_in_end_period else None
+
+        return start_period, end_period, str(real_end_date)
     
     else:
         # Fecha Única (solo al fecha final)
@@ -1452,7 +1495,7 @@ def crear_boton(nombre, data,fecha_fin=None,periodo=None):
 
 # -- Funciones para el proceso de Benchmarks --
 st.cache_data
-def start_date(end_date, n_months=1, YTD=False):
+def start_date_fun(end_date, n_months=1, YTD=False):
     # Get n_months for YTD
     if YTD:
         n_months = end_date.month
@@ -1473,11 +1516,11 @@ def returns_table_bmrk(df_returns, end_date, start_date_SI, name):
     end_date = pd.to_datetime(end_date)
     start_date_SI = pd.to_datetime(start_date_SI)
 
-    start_1M = start_date(end_date, n_months=1)
-    start_3M = start_date(end_date, n_months=3)
-    start_6M = start_date(end_date, n_months=6)
-    start_12M = start_date(end_date, n_months=12)
-    start_YTD = start_date(end_date, YTD=True)
+    start_1M = start_date_fun(end_date, n_months=1)
+    start_3M = start_date_fun(end_date, n_months=3)
+    start_6M = start_date_fun(end_date, n_months=6)
+    start_12M = start_date_fun(end_date, n_months=12)
+    start_YTD = start_date_fun(end_date, YTD=True)
 
     # List of start dates
     start_list = [start_1M, start_3M, start_6M, start_12M, start_YTD]
@@ -1596,6 +1639,7 @@ def create_excel_bmrk(dict_results, end_date, df_bmk_info):
 
 st.cache_data
 def date_bmrk_process(_data):
+
     # Get min and max price date
     df_prices = _data["Prices"].set_index('Date')
     # df_prices = df_prices.dropna()
@@ -1613,3 +1657,101 @@ def date_bmrk_process(_data):
             max_date = max_date - pd.Timedelta(days=1)
 
     return max_date, min_date
+
+
+#Funciones para generar el proceso de monthly returns tables
+
+def funds_port_cumm_rend(_data, fecha_fin, ticker_map, periodicity="Custom Date", c_d=None):
+
+    df_info = _data['Info']
+    index_cols = df_info[df_info['Type'].isin(['Fund', 'Commodity'])]['Ticker'].tolist()
+
+    df_prices = _data['Prices'].set_index('Date')
+    df_ocw = _data['OCWHAUA LX Equity'].set_index('Date')
+    df_dfaf = _data["FDAF"].set_index("Date")
+
+    df_prices = df_prices.join(df_ocw, how='left')
+    df_prices = df_prices.join(df_dfaf, how="left")
+
+    df_prices_all = df_prices[index_cols]
+
+    #ffill para ocw y dfaf
+    df_prices_all['OCWHAUA LX Equity'] = df_prices_all['OCWHAUA LX Equity'].ffill()
+    df_prices_all['FDAF'] = df_prices_all['FDAF'].ffill()
+
+    # Definición de Fecha de Inicio según Periodicidad
+    fecha_inicio_aux,fecha_inicio_analisis = start_dt(fecha_fin, periodicity,c_d)
+
+    if fecha_inicio_aux == "INSUFFICIENT_DATA":
+        st.warning(f"Insufficient historical data for {periodicity}. "
+                f"Records start on: {pd.to_datetime('2015-12-03').date()}")
+        st.stop()
+    else:
+        # Lógica de asignación final
+        if periodicity == 'Since Inception':
+
+            fecha_inicio = df_prices.index.min()
+            fecha_inicio_analisis = fecha_inicio
+
+        else:
+
+            idx_start = df_prices.index.get_indexer([fecha_inicio_aux], method='backfill')[0]
+            fecha_inicio = df_prices.index[idx_start]
+            # fecha_inicio_precios = df_prices.index[idx_start_proces]
+
+        
+        st.success(f"Analysis period: {fecha_inicio_analisis.strftime('%Y-%m')} to {pd.to_datetime(fecha_fin).strftime('%Y-%m')}")
+
+    #precios para el cálculo de los retornos
+    prices_to_returns = df_prices_all.loc[:fecha_fin]
+    returns_2,fechas_reales = kit_metricas.df_returns(prices_to_returns)
+
+
+    returns = returns_2.loc[fecha_inicio: fecha_fin]
+    #Para el caso de ocw y dfaf solo se quedan con los valareos donde las fechs coincidan 
+    returns['OCWHAUA LX Equity'] = returns['OCWHAUA LX Equity'].where(df_ocw["OCWHAUA LX Equity"].notna())
+    returns['FDAF'] = returns['FDAF'].where(df_dfaf["FDAF"].notna())
+    returns_z=returns.fillna(0)
+
+    # _____________ Portafolios _______________
+
+    df_fixed_portfolios = _data['Portfolio Prices'].set_index('Date')
+    df_nominals = _data['Nominals'].copy()
+    df_prices_all_port=portfolio_Prices(df_prices,df_fixed_portfolios,df_nominals)
+
+    prices_to_returns_port = df_prices_all_port.loc[:fecha_fin]
+
+    returns_port,fechas_reales_port = kit_metricas.df_returns(prices_to_returns_port)
+    returns_port = returns_port.loc[fecha_inicio:fecha_fin]
+
+    #returns con NaN para el cálculo de las métricas
+    returns_port=returns_port.replace(0,np.nan)
+    returns_z_port=returns_port.fillna(0)
+
+    total_full_returns = pd.concat([returns_z_port, returns_z],axis=1)
+
+     
+    # ____________ Retornos Acumulados de los fondos y portafolios ____________
+
+    grupos_mensuales = total_full_returns.groupby(pd.Grouper(freq='M'))
+
+    #Aplicar la función a cada mes y guardar el último valor (el total acumulado del mes)
+    resultados_meses = []
+
+    for fecha_fin_mes, sub_df in grupos_mensuales:
+        if not sub_df.empty:
+            # Formateamos la fecha a Año-Mes (ej. "2026-06")
+            mes_formateado = fecha_fin_mes.strftime("%b'%y")
+            
+            # Se obtiene el rendimiento acumulado del mes y se agrega a los resultados de los meses
+            df_mes_acumulado = kit_metricas.cumm_return(sub_df, fecha_fin=mes_formateado)
+            resultados_meses.append(df_mes_acumulado)
+
+    # Concatenar todos los meses en un único DataFrame final
+    df_cumm_full = (pd.concat(resultados_meses)).T
+
+    map_names = {v: k for k, v in ticker_map.items()}
+    final_df = df_cumm_full.rename(index=map_names)
+
+
+    return final_df
