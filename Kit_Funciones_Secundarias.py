@@ -206,7 +206,7 @@ def validar_estructura_excel(archivo):
     except Exception as e:
         return False, f"An unexpected error occurred during validation: {str(e)}"
 
-def assets_filter(topic, _data):
+def assets_filter(topic, _data, activate_pills=None):
     """
     Gestiona la interfaz de selección de activos (Pills) y filtra el universo de datos.
 
@@ -230,13 +230,16 @@ def assets_filter(topic, _data):
         pills_options = [f"Custom {name}", f"All {name}", f"Manager {name}"]
 
     # Pills
-    pills = st.pills(
-        label="Options", 
-        label_visibility="collapsed",
-        options=pills_options,
-        default=pills_options[0],
-        key=f"pills_{topic}" # Añadimos key única por seguridad
-    )
+    if activate_pills:
+        pills = f"Custom {name}"
+    else:
+        pills = st.pills(
+            label="Options", 
+            label_visibility="collapsed",
+            options=pills_options,
+            default=pills_options[0],
+            key=f"pills_{topic}" # Añadimos key única por seguridad
+        )
 
     #Filtrado del DataFrame según el tipo de activo
     if topic == "Funds":
@@ -1711,6 +1714,7 @@ def funds_port_cumm_rend(_data, fecha_fin, ticker_map, periodicity="Custom Date"
     #Para el caso de ocw y dfaf solo se quedan con los valareos donde las fechs coincidan 
     returns['OCWHAUA LX Equity'] = returns['OCWHAUA LX Equity'].where(df_ocw["OCWHAUA LX Equity"].notna())
     returns['FDAF'] = returns['FDAF'].where(df_dfaf["FDAF"].notna())
+    returns_nan = returns.copy()
     returns_z=returns.fillna(0)
 
     # _____________ Portafolios _______________
@@ -1725,15 +1729,19 @@ def funds_port_cumm_rend(_data, fecha_fin, ticker_map, periodicity="Custom Date"
     returns_port = returns_port.loc[fecha_inicio:fecha_fin]
 
     #returns con NaN para el cálculo de las métricas
+    returns_port_nan = returns_port.copy()
     returns_port=returns_port.replace(0,np.nan)
     returns_z_port=returns_port.fillna(0)
 
     total_full_returns = pd.concat([returns_z_port, returns_z],axis=1)
-
+    #aplicación de mask nan para recuperar los NaN originales y no confundirlos con rendimientos originales
+    total_full_returns_nan = pd.concat([returns_port_nan, returns_nan], axis=1)
+    mask_nan = total_full_returns_nan.isna()
+    total_real_returns = total_full_returns.mask(mask_nan)
      
     # ____________ Retornos Acumulados de los fondos y portafolios ____________
 
-    grupos_mensuales = total_full_returns.groupby(pd.Grouper(freq='M'))
+    grupos_mensuales = total_real_returns.groupby(pd.Grouper(freq='M'))
 
     #Aplicar la función a cada mes y guardar el último valor (el total acumulado del mes)
     resultados_meses = []

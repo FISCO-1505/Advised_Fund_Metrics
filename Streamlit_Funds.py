@@ -109,6 +109,8 @@ def contenido_principal():
                     
                     #recuperar los assets con el nombre original (ticker)
                     assets_tickers = [ticker_map[n] for n in assets]
+
+                    _, _, ticker_map_funds = kit_f_secundarias.assets_filter("Funds", data["Info"],True)
                     
                     selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
@@ -134,7 +136,7 @@ def contenido_principal():
                             st.warning("⚠️ Please select at least one asset/portfolio to continue.")
                             return
                         
-                        kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers)
+                        kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers,ticker_map_funds)
                         st.success("You can download the Reports!")
 
                 elif topic == "Monthly Returns":

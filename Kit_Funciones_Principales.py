@@ -429,7 +429,7 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
             except Exception as e:
                 st.error("There's a fund with no data for this periodicity selected")
 
-def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
+def tabla_rendimientos(_data,fecha_fin,portfolio_select,ticker_map,periodicity="YTD"):
     """
     Genera reportes de rendimiento detallados y archivos Excel descargables para 
     una selección de portafolios.
@@ -566,7 +566,20 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
             
             #precios de los fondos de cada portafolio
             start_prices=prices[cols_name].loc[[prices.index.min()]]
-            final_prices=prices[cols_name].loc[[prices.index.max()]]
+            final_prices=prices[cols_name].ffill().loc[[prices.index.max()]]
+
+            map_names = {v: k for k, v in ticker_map.items()}
+            fechas_dict_faltantes = {
+                col: prices[col].last_valid_index()
+                for col in cols_name 
+                if prices[col].last_valid_index() != pd.to_datetime(fecha_fin)
+            }
+
+            # 2. Lo convertimos a Serie de Pandas y ahora sí usamos .rename()
+            fechas_reales_fondos_faltantes = {
+                map_names.get(clave, clave): valor 
+                for clave, valor in fechas_dict_faltantes.items()
+            }
             
             #precios de portafolios
             portfolio_start_price=df_portfolio_prices.loc[fecha_inicio,port]
@@ -589,7 +602,11 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,periodicity="YTD"):
             excel_file=kit_f_secundarias.crear_excel(large_name_port,cols_name, total_portfolio,start_prices,
                                                     final_prices,allocation,port,prices,img_buffer,
                                                     df_ocw,df_dfaf,start_dt_ocw,start_dt_dfaf)
+            
 
+            if fechas_reales_fondos_faltantes is not None:
+                for key,item in fechas_reales_fondos_faltantes.items():
+                    st.warning(f"{key} has the next real price date: {item.strftime('%Y-%m-%d')}")
             
             # boton de descarga
             st.download_button(
@@ -628,13 +645,18 @@ def bmrk_process(_data,end_date):
 def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, ticker_map=None,c_d=None):
 
     def color_negativo_positivo(val):
-        color = "#000000" if val == 0 else ('#28A745' if val > 0 else '#DC3545')
+        color = "#000000" if val == 0 or val=="-" else ('#28A745' if val > 0 else '#DC3545')
         return f'color: {color};'
 
     fnds_cumm_ret = kit_f_secundarias.funds_port_cumm_rend(_data, fecha_fin, ticker_map, c_d=c_d)
 
+    #los NaN se reemplazan por los guiones
+    df_filtrado = fnds_cumm_ret.loc[assets_selected].fillna("-")
+
     #Aplicar el formato de porcentaje y el color
-    df_estilizado = fnds_cumm_ret.loc[assets_selected].style.format("{:.2%}").applymap(color_negativo_positivo)
+    df_estilizado = df_filtrado.style.format(
+            lambda x: f"{x:.2%}" if isinstance(x, (int, float)) and not pd.isna(x) else x
+        ).map(color_negativo_positivo)
 
     st.dataframe(df_estilizado, width='stretch')
 
