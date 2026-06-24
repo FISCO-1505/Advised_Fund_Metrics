@@ -46,7 +46,7 @@ def contenido_principal():
     
         # seleccionar el tipo de proyecto
         st.title(":blue[Select a Process]")
-        process = st.selectbox("Choose one:",["Benchmarks Tables", "Advised Funds Metrics"],
+        process = st.selectbox("Choose one:",["Benchmarks Tables", "Advised Funds Metrics", "PCE Benchmarks"],
                                 label_visibility="collapsed"
                                 )
         
@@ -183,7 +183,13 @@ def contenido_principal():
             # Insert msg 'Done'
             st.success("Done!", icon="✅")
 
-    
+    elif process == "PCE Benchmarks" and data is not None:
+        # Write title
+        titulo = "PCE Benchmarks"
+        st.markdown(f"<h1 style='text-align: center; color: #1D59A9;'>{titulo}</h1>", unsafe_allow_html=True)
+        selected_date = kit_f_secundarias.calendar(data["PCE Prices"]["Date"], mode="Year-Month-PCE")
+
+
     else:
         st.warning("Upload the corresponding file before select a Process")
         
