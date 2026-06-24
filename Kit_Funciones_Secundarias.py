@@ -15,6 +15,8 @@ import numpy as np
 import matplotlib.ticker as mtick
 from scipy.interpolate import make_interp_spline
 
+
+from pandas.tseries.offsets import MonthEnd
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -434,6 +436,27 @@ def calendar(df, mode):
         real_end_date = max(dates_in_end_period) if dates_in_end_period else None
 
         return start_period, end_period, str(real_end_date)
+    
+    elif mode == "Year-Month-PCE":
+        
+        available_dates = (df + MonthEnd(1)).dt.strftime("%B-%y")
+        min_date = min(available_dates)
+
+        available_period = available_dates.iloc[::-1]
+        st.markdown("<h3 style='color: #1D59A9;'>Select Report Date</h3>", unsafe_allow_html=True)
+        end_period = st.selectbox(
+            "End Period",
+            options=available_period,
+            index=0,
+            key="end_period_input",
+            label_visibility="collapsed"
+        )
+        
+        if min_date >= end_period:
+            st.error("❌ Error: Start month cannot be after or equal to end month.")
+            return None, None, None
+
+        return end_period
     
     else:
         # Fecha Única (solo al fecha final)
@@ -1763,3 +1786,107 @@ def funds_port_cumm_rend(_data, fecha_fin, ticker_map, periodicity="Custom Date"
 
 
     return final_df
+
+
+# -- Funciones para el proceso de PCE Benchmarks --
+
+@st.cache_data(show_spinner=False)
+def pce_values(df_matrix):
+    dict_funds = {}
+    unique_entities = df_matrix["Entity"].unique()
+    for entt in unique_entities:
+        df_sub = df_matrix[df_matrix["Entity"]==entt]
+
+        df_pivot = df_sub.pivot_table(
+                        index="Start Date",
+                        columns="Fund",
+                        values="PCE",
+                        aggfunc="sum"
+                        )
+        
+        pivot_columns = df_pivot.columns
+
+        for col in pivot_columns:
+
+            dict_funds[f"{entt}_{col}"] = df_pivot[col].dropna()
+
+    return dict_funds
+
+
+
+@st.cache_data(show_spinner=False)
+def formato_BBVA(df_prices,pce_values,entidad,fondos,tipo):
+    output = io.BytesIO()
+
+    base = {"align":"left", "valign":"vcenter", "font_name":"Lato Light"}
+    titulos_bg_a = workbook.add_format({**base,"font_size":12,"bg_color":"#0070C0", "font_color":"#FFFFFF", "bold":True,})
+    titulos_bg_v = workbook.add_format({**base,"font_size":12,"bg_color":"#00B050", "font_color":"#FFFFFF", "bold":True,})
+    titulos_bg_vf = workbook.add_format({**base,"font_size":12,"bg_color":"#005426", "font_color":"#FFFFFF", "bold":True,})
+    
+    values_bg_a = workbook.add_format({**base,"font_size":11,"bg_color":"#0070C0", "font_color":"#000000", "bold":True,})
+    values_bg_v = workbook.add_format({**base,"font_size":11,"bg_color":"#00B050", "font_color":"#000000", "bold":True,})
+    values_bg_vf =workbook.add_format({**base,"font_size":11,"bg_color":"#005426", "font_color":"#FFFFFF", "bold":True,})
+
+    values_n1 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,})
+    values_n2 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":False,})
+    values_a1 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":True,})
+    values_a2 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False,})
+    
+    
+    options = {'nan_inf_to_errors': True}
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
+        for i,hojas in enumerate(fondos):
+            workbook = writer.book
+            sheet_name = fondos[i] if entidad in ["BBVA", "SAM"] else pce_values[f"{entidad}_{fondos[i]}"][i]
+
+            worksheet = workbook.add_worksheet(f"Cálculos PCE y Spread {sheet_name}")
+
+
+    pass
+
+
+def generar_reportes_PCE(df_prices,pce_values,fecha_fin,entidades_select):
+    
+    config_fondos = {
+        "BBVA": {
+            "funds": ["AGT", "STRAT"],
+            "diseno": formato_BBVA,
+            "tipo": "agrupado"
+        },
+        "MS": {
+            "funds": ["A", "B"],
+            "diseno": formato_MS,
+            "tipo": "agrupado"
+        },
+        "ROTH": {
+            "funds": ["A"],
+            "diseno": formato_ROTH,
+            "tipo": "individual"
+        },
+        "SAM": {
+            "funds": ["Tur & Nab"],
+            "diseno": formato_SAM,
+            "tipo": "individual"
+        },
+        "WHO": {
+            "funds": ["A"],
+            "diseno": formato_WHO,
+            "tipo": "individual"
+        }
+    }
+    
+    for entidad, info in config_fondos.items():
+
+        if entidad in entidades_select:
+            if info["tipo"] == "agrupado":
+                # Generamos el excel pasando la función de diseño correspondiente
+                excel_data = info["diseno"](df_prices,pce_values,entidad,info["funds"],info["tipo"])
+
+                crear_boton(entidad, excel_data,fecha_fin)
+                pass
+            # else:
+            #     for ticker in activos_presentes:
+            #         excel_data, titulo = info["diseno"](df_prices)
+            #         crear_boton(entidad, excel_data,fecha_fin)
+            #         pass
+    
