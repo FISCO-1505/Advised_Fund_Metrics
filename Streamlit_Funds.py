@@ -89,28 +89,28 @@ def contenido_principal():
                 if topic in ["Funds", "Portfolio"]:
                     # Filtros de Assets y Stats
                     st.markdown("<h3 style='color: #1D59A9;'>Select assets</h3>", unsafe_allow_html=True)
-                    all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                    all_assets, assets_selected, ticker_map, mngr_assets_select = kit_f_secundarias.assets_filter(topic, data["Info"])
                     assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
                 
                     #recuperar los assets con el nombre original (ticker)
                     assets_tickers = [ticker_map[n] for n in assets]
                     
                     st.markdown("<h3 style='color: #1D59A9;'>Select stats</h3>", unsafe_allow_html=True)
-                    all_stats, stats_selected = kit_f_secundarias.stats_filter(topic)
+                    all_stats, stats_selected, mngr_stat_select = kit_f_secundarias.stats_filter(topic)
                     stats = st.multiselect("Stats:", all_stats, default=stats_selected, label_visibility="collapsed")
 
-                    kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers,ticker_map)
+                    kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers, ticker_map, mngr_stat_select, mngr_assets_select)
 
                 elif topic == "Returns Table":
 
                     st.markdown("<h3 style='color: #1D59A9;'>Select Portfolios</h3>", unsafe_allow_html=True)
-                    all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                    all_assets, assets_selected, ticker_map, _ = kit_f_secundarias.assets_filter(topic, data["Info"])
                     assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
                     
                     #recuperar los assets con el nombre original (ticker)
                     assets_tickers = [ticker_map[n] for n in assets]
 
-                    _, _, ticker_map_funds = kit_f_secundarias.assets_filter("Funds", data["Info"],True)
+                    _, _, ticker_map_funds, _ = kit_f_secundarias.assets_filter("Funds", data["Info"],True)
                     
                     selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
@@ -142,7 +142,7 @@ def contenido_principal():
                 elif topic == "Monthly Returns":
                     
                     st.markdown("<h3 style='color: #1D59A9;'>Select Assets</h3>", unsafe_allow_html=True)
-                    all_assets, assets_selected, ticker_map = kit_f_secundarias.assets_filter(topic, data["Info"])
+                    all_assets, assets_selected, ticker_map, _ = kit_f_secundarias.assets_filter(topic, data["Info"])
                     assets = st.multiselect("Assets:", all_assets, default=assets_selected, label_visibility="collapsed")
 
                     #recuperar los assets con el nombre original (ticker)

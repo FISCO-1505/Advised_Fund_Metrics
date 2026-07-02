@@ -280,7 +280,7 @@ def assets_filter(topic, _data, activate_pills=None):
         else:
             assets_selected = assets_names[:2]
 
-    return assets_names, assets_selected, mapping
+    return assets_names, assets_selected, mapping, pills
 
 def stats_filter(topic):
     """
@@ -343,7 +343,7 @@ def stats_filter(topic):
     
     
 
-    return stats,stats_selected
+    return stats,stats_selected, pills
 
 def calendar(df, mode):
     """
@@ -1162,15 +1162,15 @@ def formato_bbva(funds_cmmdty):
             # -- Absolute --
             worksheet1.write(3+i,1,stat,format_header_3)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
-                worksheet1.write(3+i,2,funds_cmmdty[stat].iloc[0],pct)
+                worksheet1.write(3+i,2,funds_cmmdty[stat].iloc[-1],pct)
             else:
-                worksheet1.write(3+i,2,funds_cmmdty[stat].iloc[0],num)
+                worksheet1.write(3+i,2,funds_cmmdty[stat].iloc[-1],num)
 
             # -- Strategic --
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
-                worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[-1],pct)
+                worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[0],pct)
             else:
-                worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[-1],num)
+                worksheet1.write(3+i,4,funds_cmmdty[stat].iloc[0],num)
 
         worksheet1.write(2+len(funds_cmmdty.columns),1,"",format_superior)
         worksheet1.write(2+len(funds_cmmdty.columns),2,"",format_superior)
@@ -1206,16 +1206,16 @@ def formato_bbva(funds_cmmdty):
             # -- Absolute --
             worksheet.write(1,2+i,stat,format_title)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
-                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[0],pct)
+                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[-1],pct)
             else:
-                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[0],num)
+                worksheet.write(2,2+i,funds_cmmdty[stat].iloc[-1],num)
 
             # -- Strategic --
             worksheet.write(11,2+i,stat,format_title)
             if stat in ["Cumulative","Vol","Tracking Error","Max. Drawdown"]:
-                worksheet.write(12,2+i,funds_cmmdty[stat].iloc[-1],pct)
+                worksheet.write(12,2+i,funds_cmmdty[stat].iloc[0],pct)
             else:
-                worksheet.write(12,2+i,funds_cmmdty[stat].iloc[-1],num)
+                worksheet.write(12,2+i,funds_cmmdty[stat].iloc[0],num)
             
 
         # Ajustar ancho de columnas
@@ -1337,8 +1337,8 @@ def formato_rothschild(funds_cmmdty):
         worksheet.write("B7", "Total Return", label)
         worksheet.write("E7", "Retorno total", label)
 
-        worksheet.write("C7", "", workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
-        worksheet.write("F7", "", workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
+        worksheet.write("C7", funds_cmmdty.get("Cumulative", [0])[0], workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
+        worksheet.write("F7", funds_cmmdty.get("Cumulative", [0])[0], workbook.add_format({**base_font, "num_format": "0.00%", "align": "center","bottom":1}))
 
         worksheet.write("B8", "Risk", fmt_section)
         worksheet.write("E8", "Riesgo", fmt_section)

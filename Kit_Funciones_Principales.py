@@ -5,7 +5,7 @@ import numpy as np
 import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Metricas as kit_metricas
 
-def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,ticker_map=None,c_d=None):
+def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,toggle_SI=None,ticker_map=None,c_d=None):
     """
     Realiza el análisis cuantitativo completo de fondos y materias primas.
     
@@ -115,6 +115,16 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     df_mdd = kit_metricas.Max_Drawdown(returns, fechas_reales)
 
 
+    #se inserta el since inception para el max drawdown de los reportes
+    if toggle_SI:
+
+        returns_mdd_SI = returns_2.loc[:fecha_fin]
+        #Para el caso de ocw y dfaf solo se quedan con los valareos donde las fechs coincidan 
+        returns_mdd_SI['OCWHAUA LX Equity'] = returns_mdd_SI['OCWHAUA LX Equity'].where(df_ocw["OCWHAUA LX Equity"].notna())
+        returns_mdd_SI['FDAF'] = returns_mdd_SI['FDAF'].where(df_dfaf["FDAF"].notna())
+        df_mdd = kit_metricas.Max_Drawdown(returns_mdd_SI, fechas_reales)
+        st.write("Se activa el Max drawdon con since inception")
+
     fnds_cmmdty = pd.DataFrame(index=prices.columns)
 
     for fund in prices.columns:
@@ -189,7 +199,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     
     return fnds_cmmdty,formatos
 
-def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,ticker_map=None,c_d=None):
+def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,toggle_SI=None,ticker_map=None,c_d=None):
     """
     Calcula el desempeño de carteras de inversión (Portfolios) basándose en nominales y precios.
 
@@ -338,7 +348,7 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
 
     return final_portfolios, formatos
 
-def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
+def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_stat_select, mngr_assets_select):
     """
     Maneja el flujo de trabajo de la UI para procesar tanto fondos como portafolios.
 
@@ -357,9 +367,20 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
     else:
         selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
-    #Comparativa
-    toggle_button = st.toggle("Comparative", key=f"toggle_{topic}_{selection}")
-    grafico= True if toggle_button else None
+    #Comparativa con Since Inception para el report manager
+    if mngr_assets_select == "Manager Assets" and mngr_stat_select == "Manager Stats":
+        col1, col2, col_vacia = st.columns([.4, .6, 1], vertical_alignment="center")
+        with col1:
+            toggle_button = st.toggle("Comparative", key=f"toggle_{topic}_{selection}")
+            grafico= True if toggle_button else None
+
+        with col2:
+            toggle_SI = st.toggle("SI Manager Report", key=f"toggle_{mngr_assets_select}_{mngr_stat_select}",value=True)
+
+    else:
+            
+        toggle_button = st.toggle("Comparative", key=f"toggle_{topic}_{selection}")
+        grafico= True if toggle_button else None
     
     # -- session state para los botones de los fondos --
     current_params = f"{selected_date}_{sorted(assets)}"
@@ -394,12 +415,12 @@ def procesar_analisis(topic, data, selection, stats, assets,ticker_map):
                 func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
                 
                 if selection == "Custom Date":
-                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map, start_date)
+                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map, start_date)
                     periodo_excel=f"{start_date} to {selected_date}"
                     fecha_excel=None
 
                 else:
-                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,ticker_map)
+                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map)
                     periodo_excel="SI" if selection == "Since Inception" else selection
                     fecha_excel=selected_date
 
