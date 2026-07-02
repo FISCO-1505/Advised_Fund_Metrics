@@ -60,6 +60,8 @@ def start_dt(end_date, period, custom_start=None, min_allowed_date='2015-12-03')
     elif period == "1Y":
         start_date = end_dt - pd.DateOffset(years=1) +  pd.Timedelta(days=1)
         start_date_anlisis = start_date - pd.Timedelta(days=1)
+
+    
         
     if start_date < min_dt:
         return "INSUFFICIENT_DATA" ,"Error"
@@ -1788,7 +1790,52 @@ def funds_port_cumm_rend(_data, fecha_fin, ticker_map, periodicity="Custom Date"
     return final_df
 
 
-# -- Funciones para el proceso de PCE Benchmarks --
+# ---------- Funciones para el proceso de PCE Benchmarks ----------
+
+@st.cache_data
+def pce_start_date(end_dt, period, inception_date=None):
+    """
+    Devuelve la fecha de inicio correspondiente a un periodo dado
+    basado en una fecha de referencia (end_dt).
+    
+    Parameters:
+    - end_dt: str, datetime o pd.Timestamp (Fecha de referencia / fin)
+    - period: str ('MTD', 'YTD', '3M', '6M', '12M', 'SI')
+    - inception_date: str, datetime o pd.Timestamp (Requerido solo para 'SI')
+    """
+    # Aseguramos que la fecha de referencia sea un Timestamp de Pandas
+    end_dt = pd.to_datetime(end_dt, format="%b-%y")
+    # Forzamos a que se mueva al último día de ese mes
+    end_dt = end_dt + pd.offsets.MonthEnd(0)
+    
+    if period == "MTD":
+        return (end_dt.replace(day=1) - pd.Timedelta(days=1))
+        
+    elif period == "YTD":
+        return pd.Timestamp(year=end_dt.year - 1, month=12, day=31)
+        
+    elif period == "3M":
+        fecha_hace_3m = end_dt - pd.DateOffset(months=3)
+        return fecha_hace_3m + pd.offsets.MonthEnd(0)
+        
+    elif period == "6M":
+        fecha_hace_6m = end_dt - pd.DateOffset(months=6)
+        return fecha_hace_6m + pd.offsets.MonthEnd(0)
+        
+    elif period in ["12M", "1Y"]:
+        fecha_hace_12m = end_dt - pd.DateOffset(months=12)
+        return fecha_hace_12m + pd.offsets.MonthEnd(0)
+        
+    elif period in ["SI", "Since Inception"]:
+        if inception_date is None:
+            raise ValueError("Para el periodo 'Since Inception' debes proveer una 'inception_date'.")
+        
+        inicio_dt = pd.to_datetime(inception_date, format="%b-%y")
+        
+        return inicio_dt + pd.offsets.MonthEnd(0)
+        
+    else:
+        raise ValueError(f"Periodo '{period}' no reconocido.")
 
 @st.cache_data(show_spinner=False)
 def pce_values(df_matrix):
@@ -1812,7 +1859,47 @@ def pce_values(df_matrix):
 
     return dict_funds
 
+    
+@st.cache_data(show_spinner=False)
+def dias_diff(pce_values, end_date):
 
+    end_date = pd.to_datetime(end_date, format="%b-%y")
+    end_date = end_date + pd.offsets.MonthEnd(0)
+
+    dict_dias = {}
+    
+    for cols in pce_values.keys():
+        # Convertimos las llaves (fechas) a una lista ordenada de Timestamps de Pandas
+        # Usamos pd.to_datetime para asegurar que podamos restarlas directamente
+        fechas_ordenadas = sorted([pd.to_datetime(f) for f in pce_values[cols].keys()])
+        
+        if not fechas_ordenadas:
+            continue
+            
+        lista_diferencias = []
+        
+        # Caso A: Si hay más de una fecha, restamos sucesivamente (fecha2 - fecha1, fecha3 - fecha2...)
+        if len(fechas_ordenadas) > 1:
+            for i in range(len(fechas_ordenadas) - 1):
+                diff_sucesiva = (fechas_ordenadas[i+1] - fechas_ordenadas[i]).days
+                lista_diferencias.append(diff_sucesiva)
+        
+        # Caso B y Final: Siempre se calcula la última fecha contra la end_date
+        diff_final = (end_date - fechas_ordenadas[-1]).days
+        lista_diferencias.append(diff_final)
+        
+        if len(lista_diferencias) == 1:
+            dict_dias[cols] = lista_diferencias[0]
+        else:
+            dict_dias[cols] = lista_diferencias
+
+    return dict_dias
+
+@st.cache_data(show_spinner=False)
+def calculo_dias(pce_values, end_date):
+
+    pass
+    
 
 @st.cache_data(show_spinner=False)
 def formato_BBVA(df_prices,pce_values,entidad,fondos,tipo):

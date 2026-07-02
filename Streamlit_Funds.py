@@ -189,6 +189,12 @@ def contenido_principal():
         st.markdown(f"<h1 style='text-align: center; color: #1D59A9;'>{titulo}</h1>", unsafe_allow_html=True)
         selected_date = kit_f_secundarias.calendar(data["PCE Prices"]["Date"], mode="Year-Month-PCE")
 
+        st.markdown("<h3 style='color: #1D59A9;'>Select Entities</h3>", unsafe_allow_html=True)
+
+        entities = st.multiselect("Entities", data["Matrix"]["Entity"].unique(),label_visibility="collapsed")
+                
+        kit_f_principales.PCE_Reports(data,selected_date,entities)
+
 
     else:
         st.warning("Upload the corresponding file before select a Process")

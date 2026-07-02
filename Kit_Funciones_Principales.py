@@ -1,7 +1,9 @@
-
 import pandas as pd
+from pandas.tseries.offsets import MonthEnd
 import streamlit as st
 import numpy as np
+
+import locale
 import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Metricas as kit_metricas
 
@@ -683,3 +685,47 @@ def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, tick
 
     st.info(f"The final date is: {pd.to_datetime(real_end_date).strftime('%b %d, %Y')}")
 
+def PCE_Reports(_data, fecha_informe=None, entidades=None):
+    df_matrix = _data["Matrix"]
+    df_PCE = _data["PCE Prices"]
+
+    #idioma actual del sistema
+    locale_previo = locale.setlocale(locale.LC_TIME)
+    
+    try:
+        #Cambiamos temporalmente a Español de México
+        locale.setlocale(locale.LC_TIME, 'Spanish_Mexico.1252')
+        
+        df_PCE["Fecha Informe"] = (df_PCE["Date"] + MonthEnd(1)).dt.strftime("%B-%y")
+        
+    finally:
+        #regresamos al idioma original para no afectar a Streamlit
+        locale.setlocale(locale.LC_TIME, locale_previo)
+
+    #valores del PCE
+    pce_values = kit_f_secundarias.pce_values(df_matrix)
+    
+    #rendimiento del PCE
+    df_rend = df_PCE["PCE CORE Index"].ffill().pct_change()
+    st.dataframe(df_rend)
+    #número de días
+    dias=kit_f_secundarias.dias_diff(pce_values,fecha_informe)
+    st.dataframe(dias)
+
+    # st.write(kit_f_secundarias.pce_start_date(fecha_informe,"YTD",inception_date=pce_values["BBVA_AGT"].keys()[0]))
+
+    #spreads calculados
+
+
+    #PCE + spreads
+#
+
+    #totales
+    
+#
+    st.dataframe(df_PCE)
+    st.dataframe(pce_values)
+    st.write(pce_values["MS_A"].keys()[0])
+    st.write(pce_values["MS_A"][0])
+    
+    return
