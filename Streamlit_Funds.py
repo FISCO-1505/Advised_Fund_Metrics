@@ -165,36 +165,60 @@ def contenido_principal():
             pass
 
     elif process == "Benchmarks Tables" and data is not None:
-        # Write title
         titulo = "Benchmark Returns"
         st.markdown(f"<h1 style='text-align: center; color: #1D59A9;'>{titulo}</h1>", unsafe_allow_html=True)
 
         max_date, min_date = kit_f_secundarias.date_bmrk_process(data)
 
-        # Input end date
         st.markdown("<h3 style='color: #1D59A9;'>Select the end date</h3>", unsafe_allow_html=True)
         end_date = st.date_input("Select end date", min_value=min_date, max_value=max_date,label_visibility="collapsed")
 
         submitted = st.button("Create Excel")
         if submitted:
-            # Run main function
             kit_f_principales.bmrk_process(data,end_date)      
             
-            # Insert msg 'Done'
             st.success("Done!", icon="✅")
 
     elif process == "PCE Benchmarks" and data is not None:
-        # Write title
+        
         titulo = "PCE Benchmarks"
         st.markdown(f"<h1 style='text-align: center; color: #1D59A9;'>{titulo}</h1>", unsafe_allow_html=True)
+
+        #parámetros de entrada
         selected_date = kit_f_secundarias.calendar(data["PCE Prices"]["Date"], mode="Year-Month-PCE")
-
         st.markdown("<h3 style='color: #1D59A9;'>Select Entities</h3>", unsafe_allow_html=True)
+        entities = st.multiselect("Entities", data["Matrix"]["Entity"].unique(), label_visibility="collapsed")
+        
+        # --- CONTROL DE ESTADO (SESSION STATE) ---
+        # Creamos un identificador único basado en la fecha seleccionada y las entidades elegidas.
+        # Si el usuario cambia la fecha o la selección de entidades, el reporte se ocultará de forma segura.
+        current_params_pce = f"{selected_date}_{sorted(entities)}"
 
-        entities = st.multiselect("Entities", data["Matrix"]["Entity"].unique(),label_visibility="collapsed")
-                
-        kit_f_principales.PCE_Reports(data,selected_date,entities)
+        # Inicializamos las variables de estado si no existen
+        if "last_params_pce" not in st.session_state:
+            st.session_state.last_params_pce = current_params_pce
+            st.session_state.cargar_pce = False
 
+        # Si los parámetros cambiaron, reiniciamos el estado de carga
+        if st.session_state.last_params_pce != current_params_pce:
+            st.session_state.cargar_pce = False
+            st.session_state.last_params_pce = current_params_pce
+        
+        # 1. Botón disparador (Solo cambia el estado, no ejecuta el proceso pesado directamente)
+        if st.button("Create Excel", key="btn_pce_benchmarks"):
+            # Validación rápida previa al render
+            if selected_date and len(entities) > 0:
+                st.session_state.cargar_pce = True
+            else:
+                st.warning("⚠️ Select at least 1 entity and a valid date!")
+                st.session_state.cargar_pce = False
+
+        # 2. Renderizado del reporte (Inmune a los refresh por descarga)
+        if st.session_state.cargar_pce:
+            # Ejecutamos el pipeline completo. Los botones de descarga generados aquí adentro
+            # ya no desaparecerán cuando el usuario haga clic en ellos.
+            kit_f_principales.PCE_Reports(data, selected_date, entities)
+            st.success("You can download the Reports!")
 
     else:
         st.warning("Upload the corresponding file before select a Process")

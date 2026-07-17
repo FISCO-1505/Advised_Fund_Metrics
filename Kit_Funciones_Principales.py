@@ -3,7 +3,6 @@ from pandas.tseries.offsets import MonthEnd
 import streamlit as st
 import numpy as np
 
-import locale
 import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Metricas as kit_metricas
 
@@ -686,46 +685,142 @@ def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, tick
     st.info(f"The final date is: {pd.to_datetime(real_end_date).strftime('%b %d, %Y')}")
 
 def PCE_Reports(_data, fecha_informe=None, entidades=None):
+    
     df_matrix = _data["Matrix"]
-    df_PCE = _data["PCE Prices"]
-
-    #idioma actual del sistema
-    locale_previo = locale.setlocale(locale.LC_TIME)
+    df_PCE = _data["PCE Prices"].copy()
     
-    try:
-        #Cambiamos temporalmente a Español de México
-        locale.setlocale(locale.LC_TIME, 'Spanish_Mexico.1252')
+    # Aseguramos formato de fecha Timestamp
+    df_PCE["Date"] = pd.to_datetime(df_PCE["Date"])
+    
+    # Obtener los spreads por fondo
+    pce_spread = kit_f_secundarias.pce_values(df_matrix)
+    
+    # Definir fecha final de reporte
+    end_date = pd.to_datetime(fecha_informe, format="%B-%y") + pd.offsets.MonthEnd(0)
+    
+    periodos = ["YTD", "SI", "3M", "6M", "12M"]
+    resultados_calculados = {}
+
+    for fund_key, spreads_series in pce_spread.items():
+        spreads_clean = {pd.to_datetime(k, dayfirst=True): v for k, v in spreads_series.items()}
+        resultados_calculados[fund_key] = {}
         
-        df_PCE["Fecha Informe"] = (df_PCE["Date"] + MonthEnd(1)).dt.strftime("%B-%y")
+        # Inception real del fondo
+        inception_dt = min(spreads_clean.keys())
         
-    finally:
-        #regresamos al idioma original para no afectar a Streamlit
-        locale.setlocale(locale.LC_TIME, locale_previo)
+        for period in periodos:
+            # 1. Obtener fecha de inicio del periodo para reporte
+            start_date_reporte = kit_f_secundarias.pce_start_date(fecha_informe, period, inception_date=inception_dt)
+            start_date_reporte = pd.to_datetime(start_date_reporte)
+            
+            # 2. Segmentar periodo por spreads
+            tramos = kit_f_secundarias.segmentar_periodo_por_spreads(start_date_reporte, end_date, spreads_clean)
+            
+            tramos_calculados = []
+            for i, tramo in enumerate(tramos):
+                t_start = tramo["start"]
+                t_end = tramo["end"]
+                spread_anual = tramo["spread_anual"]
+                
+                # --- Aplicación de desfases para PCE ---
+                if period == "SI" and i == 0:
+                    pce_date_start = t_start - pd.DateOffset(months=2) + pd.offsets.MonthEnd(0)
+                else:
+                    pce_date_start = t_start - pd.DateOffset(months=1) + pd.offsets.MonthEnd(0)
+                
+                pce_date_end = t_end - pd.DateOffset(months=1) + pd.offsets.MonthEnd(0)
+                
+                # Búsqueda de valores
+                val_start_row = df_PCE[df_PCE["Date"] == pce_date_start]
+                val_end_row = df_PCE[df_PCE["Date"] == pce_date_end]
+                
+                if not val_start_row.empty and not val_end_row.empty:
+                    val_start = val_start_row["PCE CORE Index"].values[0]
+                    val_end = val_end_row["PCE CORE Index"].values[0]
+                    rtdad_pce = (val_end / val_start) - 1.0
+                else:
+                    rtdad_pce = 0.0
+                
+                # --- Días transcurridos ---
+                num_dias = (t_end - t_start).days
+                
+                # --- Cálculo del Spread Devengado Compuesto (Fórmula corregida) ---
+                spread_devengado = ((1.0 + spread_anual) ** (num_dias / 365.0)) - 1.0
+                
+                # --- PCE + Spread ---
+                pce_plus_spread = rtdad_pce + spread_devengado
+                
+                # Guardamos la fecha convertida a texto (formato estándar DD/MM/AAAA o el que prefieras)
+                tramos_calculados.append({
+                    "Fecha Inicio Reporte": t_start.strftime("%d/%m/%Y"),
+                    "Fecha Fin Reporte": t_end.strftime("%d/%m/%Y"),
+                    "Rtdad PCE": rtdad_pce,
+                    "Dias": num_dias,
+                    "Spread Anual": spread_anual,
+                    "Spread Devengado": spread_devengado,
+                    "PCE+Spread": pce_plus_spread
+                })
+            
+            # --- CÁLCULO DE TOTALES PARA LA PERIODICIDAD ---
+            if tramos_calculados:
+                # 1. Producto acumulado para PCE Total: [(1+p1)*(1+p2)...] - 1
+                rtdad_pce_total = np.prod([1.0 + t["Rtdad PCE"] for t in tramos_calculados]) - 1.0
+                
+                # 2. Suma de días de todos los tramos
+                dias_totales = sum(t["Dias"] for t in tramos_calculados)
+                
+                # 3. Producto acumulado para PCE+Spread Total: [(1+ps1)*(1+ps2)...] - 1
+                pce_plus_spread_total = np.prod([1.0 + t["PCE+Spread"] for t in tramos_calculados]) - 1.0
+                
+                totales = {
+                    "Rtdad PCE Total": rtdad_pce_total,
+                    "Dias Totales": dias_totales,
+                    "PCE+Spread Total": pce_plus_spread_total
+                }
+            else:
+                totales = {
+                    "Rtdad PCE Total": 0.0,
+                    "Dias Totales": 0,
+                    "PCE+Spread Total": 0.0
+                }
+                
+            # Guardamos tanto los tramos individuales como el total consolidado del periodo
+            resultados_calculados[fund_key][period] = {
+                "Tramos": tramos_calculados,
+                "Totales": totales
+            }
 
-    #valores del PCE
-    pce_values = kit_f_secundarias.pce_values(df_matrix)
+        
+
+    # st.write("---")
+    # st.dataframe(df_PCE)
+    # st.dataframe(resultados_calculados)
     
-    #rendimiento del PCE
-    df_rend = df_PCE["PCE CORE Index"].ffill().pct_change()
-    st.dataframe(df_rend)
-    #número de días
-    dias=kit_f_secundarias.dias_diff(pce_values,fecha_informe)
-    st.dataframe(dias)
-
-    # st.write(kit_f_secundarias.pce_start_date(fecha_informe,"YTD",inception_date=pce_values["BBVA_AGT"].keys()[0]))
-
-    #spreads calculados
-
-
-    #PCE + spreads
-#
-
-    #totales
+    # # --- VISUALIZACIONES EN STREAMLIT (CONVERSIONES LIMPIAS A DATAFRAME) ---
+    # st.markdown("### Preview de Datos (BBVA_STRAT - 3M)")
     
-#
-    st.dataframe(df_PCE)
-    st.dataframe(pce_values)
-    st.write(pce_values["MS_A"].keys()[0])
-    st.write(pce_values["MS_A"][0])
+    # # 1. Para ver los tramos de "3M"
+    # df_preview_tramos = pd.DataFrame(resultados_calculados["BBVA_STRAT"]["SI"]["Tramos"])
+    # st.write("Tramos:")
+    # st.dataframe(df_preview_tramos)
+    # st.write(len(df_preview_tramos))
     
-    return
+    # # 2. Para ver los totales de "3M"
+    # df_preview_totales = pd.DataFrame([resultados_calculados["BBVA_STRAT"]["SI"]["Totales"]])
+    # st.write("Totales:")
+    # st.dataframe(df_preview_totales)
+    # st.write(end_date)
+    # st.write("Profundo mas de tramos:")
+    # st.dataframe(resultados_calculados["BBVA_STRAT"]["SI"]["Tramos"][0]["Spread Anual"])
+    
+    
+    # --- EJECUCIÓN DINÁMICA DE LA CREACIÓN DE ARCHIVOS EXCEL ---
+
+    kit_f_secundarias.generar_reportes_PCE(
+        df_prices=df_PCE, 
+        resultados_pce=resultados_calculados, 
+        spreads_clean=pce_spread, 
+        fecha_fin=end_date, 
+        entidades_select=entidades,
+    )
+

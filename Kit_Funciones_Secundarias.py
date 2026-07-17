@@ -204,8 +204,40 @@ def validar_estructura_excel(archivo):
         if not check_port.all():
             invalid_ports = portafolios_nominals[~check_port]
             return False, f"Sheet 'Nominals': The following portfolios are not registered in 'Info' as 'Portfolio' type: {invalid_ports}"
+        
+        # --- VALIDACIÓN HOJA: PCE Prices ---
+        df_pce = pd.read_excel(xls, "PCE Prices")
+        cols_pce = ["Date", "PCE CORE Index"]
+        
+        # Validar que existan las columnas requeridas
+        if not all(c in df_pce.columns for c in cols_pce):
+            return False, f"Sheet 'PCE Prices' must have columns: {cols_pce}"
+        
+        #Validar que la columna 'Date' se pueda parsear como fecha y no tenga nulos
+        try:
+            pd.to_datetime(df_pce["Date"])
+        except Exception:
+            return False, "Sheet 'PCE Prices': 'Date' column has invalid date formats."
+            
+        if df_pce["PCE CORE Index"].isnull().any():
+            return False, "Sheet 'PCE Prices': 'PCE CORE Index' column contains empty/null values."
 
+        # --- VALIDACIÓN HOJA: Matrix ---
+        df_matrix = pd.read_excel(xls, "Matrix")
+        cols_matrix = ["Entity", "Fund", "PCE", "Start Date"]
+        
+        #Validar que existan las columnas requeridas
+        if not all(c in df_matrix.columns for c in cols_matrix):
+            return False, f"Sheet 'Matrix' must have columns: {cols_matrix}"
+        
+        # Validar que las columnas clave no contengan valores vacíos (nulos)
+        for col_req in ["Entity", "Fund", "PCE", "Start Date"]:
+            if df_matrix[col_req].isnull().any():
+                return False, f"Sheet 'Matrix': Column '{col_req}' cannot contain empty/null values."
+        
+        
         return True, None
+        
 
     except Exception as e:
         return False, f"An unexpected error occurred during validation: {str(e)}"
@@ -1797,15 +1829,9 @@ def pce_start_date(end_dt, period, inception_date=None):
     """
     Devuelve la fecha de inicio correspondiente a un periodo dado
     basado en una fecha de referencia (end_dt).
-    
-    Parameters:
-    - end_dt: str, datetime o pd.Timestamp (Fecha de referencia / fin)
-    - period: str ('MTD', 'YTD', '3M', '6M', '12M', 'SI')
-    - inception_date: str, datetime o pd.Timestamp (Requerido solo para 'SI')
     """
-    # Aseguramos que la fecha de referencia sea un Timestamp de Pandas
-    end_dt = pd.to_datetime(end_dt, format="%b-%y")
-    # Forzamos a que se mueva al último día de ese mes
+    # Aseguramos que la fecha de referencia sea un Timestamp de Pandas al fin de ese mes
+    end_dt = pd.to_datetime(end_dt, format="%B-%y") if isinstance(end_dt, str) else pd.to_datetime(end_dt)
     end_dt = end_dt + pd.offsets.MonthEnd(0)
     
     if period == "MTD":
@@ -1830,13 +1856,13 @@ def pce_start_date(end_dt, period, inception_date=None):
         if inception_date is None:
             raise ValueError("Para el periodo 'Since Inception' debes proveer una 'inception_date'.")
         
-        inicio_dt = pd.to_datetime(inception_date, format="%b-%y")
-        
-        return inicio_dt + pd.offsets.MonthEnd(0)
+        # OJO: Retornamos la fecha de inicio de operaciones EXACTA (sin MonthEnd)
+        # Intentamos parsearla de manera flexible (día/mes/año o mes/año)
+        return pd.to_datetime(inception_date, dayfirst=True)
         
     else:
         raise ValueError(f"Periodo '{period}' no reconocido.")
-
+    
 @st.cache_data(show_spinner=False)
 def pce_values(df_matrix):
     dict_funds = {}
@@ -1859,121 +1885,461 @@ def pce_values(df_matrix):
 
     return dict_funds
 
-    
-@st.cache_data(show_spinner=False)
-def dias_diff(pce_values, end_date):
-
-    end_date = pd.to_datetime(end_date, format="%b-%y")
-    end_date = end_date + pd.offsets.MonthEnd(0)
-
-    dict_dias = {}
-    
-    for cols in pce_values.keys():
-        # Convertimos las llaves (fechas) a una lista ordenada de Timestamps de Pandas
-        # Usamos pd.to_datetime para asegurar que podamos restarlas directamente
-        fechas_ordenadas = sorted([pd.to_datetime(f) for f in pce_values[cols].keys()])
+@st.cache_data
+def segmentar_periodo_por_spreads(start_dt, end_dt, fund_spreads):
+    """
+    Divide un rango [start_dt, end_dt] en sub-intervalos (tramos) de acuerdo
+    a las fechas en las que cambia el spread del fondo.
+    """
+    fechas_spread = sorted([pd.to_datetime(f, dayfirst=True) for f in fund_spreads.keys()])
+    if not fechas_spread:
+        return []
         
-        if not fechas_ordenadas:
-            continue
+    tramos = []
+    intervalos_vigencia = []
+    for i in range(len(fechas_spread)):
+        inicio_vigencia = fechas_spread[i]
+        fin_vigencia = fechas_spread[i+1] if i + 1 < len(fechas_spread) else pd.Timestamp.max
+        spread_val = fund_spreads[fechas_spread[i]]
+        intervalos_vigencia.append((inicio_vigencia, fin_vigencia, spread_val))
+        
+    for inicio_vig, fin_vig, spread_val in intervalos_vigencia:
+        inter_start = max(start_dt, inicio_vig)
+        inter_end = min(end_dt, fin_vig)
+        
+        if inter_start < inter_end:
+            tramos.append({
+                "start": inter_start,
+                "end": inter_end,
+                "spread_anual": spread_val
+            })
             
-        lista_diferencias = []
-        
-        # Caso A: Si hay más de una fecha, restamos sucesivamente (fecha2 - fecha1, fecha3 - fecha2...)
-        if len(fechas_ordenadas) > 1:
-            for i in range(len(fechas_ordenadas) - 1):
-                diff_sucesiva = (fechas_ordenadas[i+1] - fechas_ordenadas[i]).days
-                lista_diferencias.append(diff_sucesiva)
-        
-        # Caso B y Final: Siempre se calcula la última fecha contra la end_date
-        diff_final = (end_date - fechas_ordenadas[-1]).days
-        lista_diferencias.append(diff_final)
-        
-        if len(lista_diferencias) == 1:
-            dict_dias[cols] = lista_diferencias[0]
-        else:
-            dict_dias[cols] = lista_diferencias
-
-    return dict_dias
+    return tramos
 
 @st.cache_data(show_spinner=False)
-def calculo_dias(pce_values, end_date):
-
-    pass
-    
-
-@st.cache_data(show_spinner=False)
-def formato_BBVA(df_prices,pce_values,entidad,fondos,tipo):
+def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_clean, end_date):
+    """
+    Función de diseño generalizada para exportar a un buffer en memoria
+    los cálculos del PCE y Spread con el formato institucional clásico (estilo BBVA).
+    """
     output = io.BytesIO()
-
-    base = {"align":"left", "valign":"vcenter", "font_name":"Lato Light"}
-    titulos_bg_a = workbook.add_format({**base,"font_size":12,"bg_color":"#0070C0", "font_color":"#FFFFFF", "bold":True,})
-    titulos_bg_v = workbook.add_format({**base,"font_size":12,"bg_color":"#00B050", "font_color":"#FFFFFF", "bold":True,})
-    titulos_bg_vf = workbook.add_format({**base,"font_size":12,"bg_color":"#005426", "font_color":"#FFFFFF", "bold":True,})
     
-    values_bg_a = workbook.add_format({**base,"font_size":11,"bg_color":"#0070C0", "font_color":"#000000", "bold":True,})
-    values_bg_v = workbook.add_format({**base,"font_size":11,"bg_color":"#00B050", "font_color":"#000000", "bold":True,})
-    values_bg_vf =workbook.add_format({**base,"font_size":11,"bg_color":"#005426", "font_color":"#FFFFFF", "bold":True,})
-
-    values_n1 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":True,})
-    values_n2 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#000000", "bold":False,})
-    values_a1 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":True,})
-    values_a2 = workbook.add_format({**base,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False,})
-    
-    
+    # Configuramos el escritor de Pandas con XlsxWriter
     options = {'nan_inf_to_errors': True}
     with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={'options': options}) as writer:
-        for i,hojas in enumerate(fondos):
-            workbook = writer.book
-            sheet_name = fondos[i] if entidad in ["BBVA", "SAM"] else pce_values[f"{entidad}_{fondos[i]}"][i]
-
-            worksheet = workbook.add_worksheet(f"Cálculos PCE y Spread {sheet_name}")
-
-
-    pass
-
-
-def generar_reportes_PCE(df_prices,pce_values,fecha_fin,entidades_select):
+        workbook = writer.book
+        
+        # --- DEFINICIÓN DE FORMATOS (Tipografía Lato y Estilos) ---
+        base_fmt = {"align": "left", "valign": "vcenter", "font_name": "Lato Light"}
+        base_right = {**base_fmt, "align": "right"}
+        base_center = {**base_fmt, "align": "center"}
+   
+        # Cabeceras principales de tablas (Alineación Centrada)
+        titulos_bg_blue = workbook.add_format({**base_center, "font_size": 11, "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        titulos_bg_green = workbook.add_format({**base_center, "font_size": 11, "bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
+        titulos_bg_vf = workbook.add_format({**base_center,"font_size":11,"bg_color":"#005426", "font_color":"#FFFFFF", "bold":True,})
+        values_a1 = workbook.add_format({**base_fmt,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":True,})
+        values_a2 = workbook.add_format({**base_fmt,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False,})
+        values_v = workbook.add_format({**base_fmt,"font_size":11,"bg_color":"#FFFFFF", "font_color":"#005426", "bold":True,})
     
+
+        # Formatos para datos (Números, Fechas y Porcentajes)
+        fmt_date_blue = workbook.add_format({**base_center, "font_size": 11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False, "num_format": "dd/mm/yyyy"})
+        fmt_date = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy","bold":True})
+        fmt_date2 = workbook.add_format({**base_center, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy","bold":True})
+        fmt_decimal = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00","bold":True})
+        fmt_decimal_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        fmt_pct_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%", "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        fmt_pct_blue2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00000%", "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        
+        fmt_dias_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
+        fmt_pce_n = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#FFFFFF", "font_color": "#000000", "bold": True})
+        fmt_total_vf = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#005426", "font_color": "#FFFFFF", "bold": True})
+
+        fmt_date_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy", "bold": True, "bottom": 1})
+        fmt_date2_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy", "bold": True, "bottom": 1})
+        fmt_decimal_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00", "bold": True, "bottom": 1})
+
+        
+        # Formato para datos generales de los tramos (con borde inferior muy tenue/gris)
+        fmt_data_border = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+
+        # Formato de fechas para los tramos
+        fmt_date_border = workbook.add_format({"font_name": "Lato Light",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+
+        # Formato para números enteros (Días)
+        fmt_int_border = workbook.add_format({"font_name": "Lato Light",'num_format': '#,##0','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+
+        # Formato para los textos descriptivos de la primera columna
+        fmt_lbl_border = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+
+        fmt_start_table = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bold': True,'bottom': 2,'bottom_color': '#000000'})
+
+        # --- FORMATOS CON BACKGROUND COLOR PARA TOTALES ---
+        # Formato de etiqueta "Total" (Azul para mantener armonía o blanco limpio)
+        fmt_total_lbl_clean = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bold': True,'top': 1,'bottom': 2,'bottom_color': '#000000'})
+
+        # Formato para el Total de Rtdad PCE (Fondo Azul con letras blancas/negras)
+        # Usamos color azul brillante (#00A4E4) y letra negrita
+        fmt_total_pce_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#0070C0','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+
+        # Formato para el Total de Días (Fondo Verde con letras blancas/negras)
+        # Usamos el verde estándar de tu cabecera (#00B050)
+        fmt_total_dias_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '#,##0','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#00B050','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+
+        # Formato para las columnas de spread vacías en la fila de totales (sin fondo)
+        fmt_total_spread_empty = workbook.add_format({"font_name": "Lato Light",'align': 'right','valign': 'vcenter','top': 1,'bottom': 2,'bottom_color': '#000000'})
+
+        fmt_total_pce_spread_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#005426','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+
+
+        for f_name in fondos_list:
+            # Determinamos dinámicamente el nombre de la hoja
+            col_key = f"{entidad}_{f_name}" if f_name in ["A", "B"] else f_name
+            
+            nombre_pestaña = f_name  # Valor por defecto si no entra en las condiciones
+            
+            if f_name in ["A", "B", "Tur & Nab"] and col_key in spreads_clean:
+                datos_columna = spreads_clean[col_key]
+                
+                # 1. Si es un diccionario de Python estándar
+                if isinstance(datos_columna, dict):
+                    if datos_columna:  # Evitamos diccionarios vacíos
+                        ultimo_spread = list(datos_columna.values())[-1]
+                        nombre_pestaña = f"{int(ultimo_spread * 100)}%"
+                        
+                # 2. Si es una Serie de Pandas (de donde proviene el error de numpy)
+                elif hasattr(datos_columna, "values") and not isinstance(datos_columna, dict):
+                    # Accedemos de forma segura sin los paréntesis ()
+                    valores_array = datos_columna.values
+                    if len(valores_array) > 0:
+                        ultimo_spread = valores_array[-1]
+                        # Validamos que el spread sea numérico antes de formatearlo
+                        try:
+                            nombre_pestaña = f"{int(float(ultimo_spread) * 100)}%"
+                        except (ValueError, TypeError):
+                            nombre_pestaña = f_name
+                            
+                # 3. Si es una lista convencional
+                elif isinstance(datos_columna, list) and len(datos_columna) > 0:
+                    ultimo_spread = datos_columna[-1]
+                    try:
+                        nombre_pestaña = f"{int(float(ultimo_spread) * 100)}%"
+                    except (ValueError, TypeError):
+                        nombre_pestaña = f_name
+
+
+                
+            sheet_title = f"Cálculos PCE y Spread {nombre_pestaña}"
+            worksheet = workbook.add_worksheet(sheet_title)
+            
+
+            #referencia para saber sobre los tramos de cada fondo
+            df_preview_tramos = pd.DataFrame(resultados_fondo[f"{entidad}_{f_name}"]["SI"]["Tramos"])
+            list_spread_anual = df_preview_tramos["Spread Anual"]
+            
+            # Habilitamos visualización de cuadrícula
+            worksheet.hide_gridlines(2)
+            
+            # --- 1. CABECERA DE LA HOJA (Metadatos del PCE) ---
+            
+            worksheet.write("A1", "Año Análisis", titulos_bg_blue)
+            worksheet.write("B1", end_date.year, titulos_bg_blue)
+            worksheet.write("A2", "Fecha Inicio", values_a2)
+            worksheet.write("B2", pd.Timestamp(year=end_date.year-1,month=12,day=31), fmt_date_blue)
+            worksheet.write("A3", "Fecha Fin", values_a2)
+            worksheet.write("B3", pd.Timestamp(year=end_date.year,month=12,day=31), fmt_date_blue)
+
+            worksheet.write("B5", "Datos cálculo Spread", values_a1)
+            worksheet.write("B6", "Spread constante", titulos_bg_blue)
+            worksheet.write("B7", "Base", titulos_bg_blue)
+            worksheet.write("B8", "Spread diario", titulos_bg_blue)
+
+            #falta poner los datos corrrespondientes a la base, spread, etc
+            for i in range(3+len(list_spread_anual)):
+                if i >2:
+                    worksheet.write(5,2+i,list_spread_anual[i-3],fmt_pct_blue)
+                    worksheet.write(6,2+i,"365",fmt_decimal_blue)
+                    worksheet.write(7,2+i,(1+list_spread_anual[i-3])**(1/365)-1,fmt_pct_blue2)
+
+                else:
+                    worksheet.write(5,2+i,"",titulos_bg_blue)
+                    worksheet.write(6,2+i,"",titulos_bg_blue)
+                    worksheet.write(7,2+i,"",titulos_bg_blue)
+
+
+            worksheet.write("B10", "Series del PCE", titulos_bg_blue)
+            worksheet.write("B11", "Source: Values StatPro Data Hub", values_a2)
+            worksheet.write("B12", "Series: S-TI-NAM-USD-PR-OT-CORE-PCE", values_a2)
+            worksheet.write("B13", "Values in USD", values_a2)
+            
+
+            start_row = 14
+
+            # --------- 2. TABLA DINÁMICA DE PRECIOS DEL PCE (Histórico) ---------
+            headers_tabla = ["Fecha para Informe", "Date", "Value", "Rtdad  PCE"]
+            for col_num, header in enumerate(headers_tabla):
+                worksheet.write(start_row-1, col_num, header, titulos_bg_blue)
+
+            #depende de cuanto se combina de celdas dependiendo el número de spreads
+            n_repetir = len(df_preview_tramos) if len(df_preview_tramos) > 1 else 1
+            headers_tabla_2 = ["Número de Días"] + ["Spread"] * n_repetir + ["PCE+ Spread"]
+            for col_num, header in enumerate(headers_tabla_2):
+                if header == "PCE+ Spread":
+                    worksheet.write(start_row-1, col_num+4, header, titulos_bg_vf)
+                else:
+                    worksheet.write(start_row-1, col_num+4, header, titulos_bg_green)
+
+            # merge de las celda combinadas
+            worksheet.merge_range(start_row-2, len(headers_tabla),
+                                  start_row-2,len(headers_tabla)-1 + len(headers_tabla_2)-1,
+                                  "Cálculo Spread",titulos_bg_green)
+
+            worksheet.write(start_row-2,len(headers_tabla)-1 + len(headers_tabla_2),
+                            "Core PCE+Spread",titulos_bg_vf)
+            
+            df_prices["Date"] = pd.to_datetime(df_prices["Date"])
+
+            # a. Calculamos el límite máximo permitido para la columna "Date" (1 mes antes de end_date)
+            # Si end_date es Mayo, el límite para "Date" será Abril.
+            limite_fecha_b = end_date - pd.DateOffset(months=1)
+
+            # b. Filtramos el DataFrame para quedarnos solo con los registros permitidos
+            df_filtrado = df_prices[df_prices["Date"] <= limite_fecha_b].reset_index(drop=True)
+            
+            # c. Escribir los registros históricos fila por fila
+            for r_idx, row in df_filtrado.iterrows():
+                row_num = start_row + r_idx
+                excel_row = row_num + 1 
+                
+                # Obtenemos la fecha de la columna B como objeto Timestamp
+                fecha_b = row["Date"]
+                
+                # Condición de diciembre (Noviembre en columna B + 1 mes de desfase = Diciembre)
+                es_diciembre_pce = (fecha_b.month == 11)
+                
+                # Asignamos formatos
+                f_date2 = fmt_date2_dec if es_diciembre_pce else fmt_date2
+                f_date = fmt_date_dec if es_diciembre_pce else fmt_date
+                f_decimal = fmt_decimal_dec if es_diciembre_pce else fmt_decimal
+                
+                # Escribimos en Excel (convertimos fecha_b a formato nativo de python para xlsxwriter)
+                worksheet.write_formula(row_num, 0, f"=EOMONTH(B{excel_row}, 1)", f_date2)
+                worksheet.write(row_num, 1, fecha_b.to_pydatetime(), f_date)
+                
+                valor_pce = row.get("PCE CORE Index", row.get("Value"))
+                worksheet.write(row_num, 2, valor_pce, f_decimal)
+                
+            # El final de los datos históricos es dinámico
+            last_pce_row = start_row + len(df_filtrado) - 1
+
+            #se insertan los datos del MTD a la altura del último precio
+            spread_diario = (1+list_spread_anual.iloc[-1])**(1/365)-1
+            rtd_MTD_pce = (df_filtrado["PCE CORE Index"].iloc[-1]/df_filtrado["PCE CORE Index"].iloc[-2] - 1)
+            dias_MTD_pce = (df_filtrado["Date"].iloc[-2] - df_filtrado["Date"].iloc[-3]).days
+            spread_MTD_pce = ((1+spread_diario)**(dias_MTD_pce)) - 1
+            core_sum_MTD = rtd_MTD_pce + spread_MTD_pce
+
+            worksheet.write(last_pce_row, 3, rtd_MTD_pce, fmt_pct_blue)
+            worksheet.write(last_pce_row, 4, dias_MTD_pce, fmt_dias_v)
+            worksheet.write(last_pce_row, 4+len(list_spread_anual), spread_MTD_pce, fmt_pce_n)
+            worksheet.write(last_pce_row, 5+len(list_spread_anual), core_sum_MTD, fmt_total_vf)
+            worksheet.write(last_pce_row, 6+len(list_spread_anual), "MTD", values_v)
+            
+            
+
+            # --------- 3. SECCIÓN DE RESULTADOS POR PERIODICIDAD ---------
+            # Espacio limpio antes de iniciar la tabla
+            res_start_row = last_pce_row + 4
+            
+            # Forzamos a que use 'n_repetir' para mantener las mismas columnas de arriba
+            n_columnas_spread = n_repetir
+
+            # Poner las lineas que corresponden al inicio de la tabla final
+            for i in range(6+n_columnas_spread):#col_num, col_name in enumerate(headers_calculos):
+                worksheet.write(res_start_row, i, "", fmt_start_table)
+                
+            current_row = res_start_row + 1
+            
+            # --- CONSTRUCCIÓN DE LA ESCALERA DE SPREADS DESDE "SI" ---
+            fechas_cambio_spread = []
+            if "Fecha Inicio Reporte" in df_preview_tramos.columns:
+                fechas_cambio_spread = sorted(
+                    [pd.to_datetime(f).normalize() for f in df_preview_tramos["Fecha Inicio Reporte"].unique()]
+                )
+            
+            # Acceso con clave combinada exacta
+            clave_combinada = f"{entidad}_{f_name}"
+            datos_fondo = resultados_fondo.get(clave_combinada, {})
+            
+            periodicidades = ["YTD", "SI", "3M", "6M", "12M"]
+            
+            for periodo in periodicidades:
+                if periodo not in datos_fondo:
+                    continue
+                
+                info_periodo = datos_fondo[periodo]
+                tramos = info_periodo.get("Tramos", [])
+                totales_periodo = info_periodo.get("Totales", {}) # <--- Extraemos el diccionario de Totales
+                if not tramos:
+                    continue
+                
+                for idx, tramo in enumerate(tramos):
+                    # Nombre del periodo (ej. "YTD") solo en la primera celda del tramo
+                    worksheet.write(current_row, 0, periodo if idx == 0 else "", fmt_lbl_border)
+                    
+                    # Convertir fechas nativas para formatear correctamente en Excel
+                    f_ini = pd.to_datetime(tramo["Fecha Inicio Reporte"]).to_pydatetime()
+                    f_fin = pd.to_datetime(tramo["Fecha Fin Reporte"]).to_pydatetime()
+                    
+                    worksheet.write(current_row, 1, f_ini, fmt_date_border)
+                    worksheet.write(current_row, 2, f_fin, fmt_date_border)
+                    worksheet.write(current_row, 3, tramo["Rtdad PCE"], fmt_data_border)
+                    worksheet.write(current_row, 4, tramo["Dias"], fmt_int_border)
+                    
+                    # --- IDENTIFICACIÓN DEL ESCALÓN DE SPREAD ---
+                    fecha_inicio_tramo = pd.to_datetime(tramo["Fecha Inicio Reporte"]).normalize()
+                    active_idx = 0
+                    
+                    if len(fechas_cambio_spread) > 0:
+                        for idx_s, start_date_spread in enumerate(fechas_cambio_spread):
+                            next_start_date = None
+                            if idx_s + 1 < len(fechas_cambio_spread):
+                                next_start_date = fechas_cambio_spread[idx_s + 1]
+                            
+                            if fecha_inicio_tramo >= start_date_spread:
+                                if next_start_date is None or fecha_inicio_tramo < next_start_date:
+                                    active_idx = idx_s
+                                    break
+                    else:
+                        active_idx = min(idx, n_columnas_spread - 1)
+
+                    # Pintamos dinámicamente las columnas de Spread en Escalera
+                    for col_idx in range(n_columnas_spread):
+                        col_dest = 5 + col_idx
+                        if col_idx == active_idx:
+                            worksheet.write(current_row, col_dest, tramo.get("Spread Devengado", 0), fmt_data_border)
+                        else:
+                            worksheet.write(current_row, col_dest, "", fmt_data_border) # Vacío
+                    
+                    # PCE+Spread en la última columna de datos del tramo
+                    col_pce_spread = 5 + n_columnas_spread
+                    pce_s_val = tramo.get("PCE+Spread", tramo.get("PCE+S", 0))
+                    worksheet.write(current_row, col_pce_spread, pce_s_val, fmt_data_border)
+                    
+                    current_row += 1
+                
+                # --- FILA DE TOTALES (Escribiendo directamente los valores calculados) ---
+                worksheet.write(current_row, 0, f"{periodo} Total", fmt_total_lbl_clean)
+                worksheet.write(current_row, 1, "", fmt_total_lbl_clean)
+                worksheet.write(current_row, 2, "", fmt_total_lbl_clean)
+                
+                # 1. Rtdad PCE Total (Azul)
+                rtdad_pce_total = totales_periodo.get("Rtdad PCE Total", 0)
+                worksheet.write(current_row, 3, rtdad_pce_total, fmt_total_pce_bg)
+                
+                # 2. Días Totales (Verde claro)
+                dias_totales = totales_periodo.get("Dias Totales", 0)
+                worksheet.write(current_row, 4, dias_totales, fmt_total_dias_bg)
+                
+                # 3. Columnas intermedias vacías para los spreads
+                for col_idx in range(n_columnas_spread):
+                    worksheet.write(current_row, 5 + col_idx, "", fmt_total_spread_empty)
+                
+                # 4. PCE+ Spread Total (Verde oscuro)
+                col_pce_spread = 5 + n_columnas_spread
+                pce_spread_total = totales_periodo.get("PCE+Spread Total", totales_periodo.get("PCE+S Total", 0))
+                worksheet.write(current_row, col_pce_spread, pce_spread_total, fmt_total_pce_spread_bg)
+                
+                current_row += 1
+
+            
+                
+            # Ajuste automático optimizado del ancho de las columnas
+            worksheet.set_column("A:A", 22)
+            worksheet.set_column("B:C", 17)
+            worksheet.set_column("D:D", 15)
+            worksheet.set_column("E:E", 18)
+            worksheet.set_column("F:Z", 18)
+
+            #inmovilizar la fila superior
+            worksheet.freeze_panes(14, 0)
+            
+    output.seek(0)
+    return output
+
+def generar_reportes_PCE(df_prices, resultados_pce, spreads_clean, fecha_fin, entidades_select):
+    """
+    Orquesta la generación de reportes individuales o agrupados basados en la selección de la UI.
+    """
     config_fondos = {
         "BBVA": {
             "funds": ["AGT", "STRAT"],
-            "diseno": formato_BBVA,
             "tipo": "agrupado"
         },
         "MS": {
             "funds": ["A", "B"],
-            "diseno": formato_MS,
             "tipo": "agrupado"
         },
         "ROTH": {
             "funds": ["A"],
-            "diseno": formato_ROTH,
             "tipo": "individual"
         },
         "SAM": {
             "funds": ["Tur & Nab"],
-            "diseno": formato_SAM,
             "tipo": "individual"
         },
         "WHO": {
             "funds": ["A"],
-            "diseno": formato_WHO,
             "tipo": "individual"
         }
     }
     
+    st.markdown("<h3 style='color: #1D59A9;'>Download Reports</h3>", unsafe_allow_html=True)
+    
     for entidad, info in config_fondos.items():
-
         if entidad in entidades_select:
             if info["tipo"] == "agrupado":
-                # Generamos el excel pasando la función de diseño correspondiente
-                excel_data = info["diseno"](df_prices,pce_values,entidad,info["funds"],info["tipo"])
+                # Agrupado: Genera un solo archivo con pestañas para cada fondo de la lista
+                excel_data = excel_pce_format(
+                    df_prices=df_prices,
+                    resultados_fondo=resultados_pce,
+                    entidad=entidad,
+                    fondos_list=info["funds"],
+                    spreads_clean=spreads_clean,
+                    end_date=fecha_fin
+                )
+                
+                # Renderiza el botón de descarga en Streamlit
+                nombre_archivo = f"INFLATION (US PCE+%)_{fecha_fin.strftime('%B %Y')} {entidad}.xlsx"
+                st.download_button(
+                    label=f"Download Report {entidad}",
+                    data=excel_data,
+                    file_name=nombre_archivo,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"btn_{entidad}"
+                )
+            else:
+                # Individual: Genera un archivo Excel único por cada fondo
+                for fund in info["funds"]:
+                    excel_data = excel_pce_format(
+                        df_prices=df_prices,
+                        resultados_fondo=resultados_pce,
+                        entidad=entidad,
+                        fondos_list=[fund],
+                        spreads_clean=spreads_clean,
+                        end_date=fecha_fin
+                    )
+                    
+                    nombre_archivo = f"INFLATION (US PCE+%)_{fecha_fin.strftime('%B %Y')} {entidad}.xlsx"
+                    st.download_button(
+                        label=f"Download Report {entidad}",
+                        data=excel_data,
+                        file_name=nombre_archivo,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"btn_{entidad}_{fund}"
+                    )
 
-                crear_boton(entidad, excel_data,fecha_fin)
-                pass
-            # else:
-            #     for ticker in activos_presentes:
-            #         excel_data, titulo = info["diseno"](df_prices)
-            #         crear_boton(entidad, excel_data,fecha_fin)
-            #         pass
-    
+
+
+
