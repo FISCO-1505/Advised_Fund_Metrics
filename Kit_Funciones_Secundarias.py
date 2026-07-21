@@ -2165,7 +2165,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
             fechas_cambio_spread = []
             if "Fecha Inicio Reporte" in df_preview_tramos.columns:
                 fechas_cambio_spread = sorted(
-                    [pd.to_datetime(f).normalize() for f in df_preview_tramos["Fecha Inicio Reporte"].unique()]
+                    [pd.to_datetime(f, dayfirst=True).normalize() for f in df_preview_tramos["Fecha Inicio Reporte"].unique()]
                 )
             
             # Acceso con clave combinada exacta
@@ -2180,7 +2180,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                 
                 info_periodo = datos_fondo[periodo]
                 tramos = info_periodo.get("Tramos", [])
-                totales_periodo = info_periodo.get("Totales", {}) # <--- Extraemos el diccionario de Totales
+                totales_periodo = info_periodo.get("Totales", {}) #diccionario de los valores totales
                 if not tramos:
                     continue
                 
@@ -2188,9 +2188,9 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                     # Nombre del periodo (ej. "YTD") solo en la primera celda del tramo
                     worksheet.write(current_row, 0, periodo if idx == 0 else "", fmt_lbl_border)
                     
-                    # Convertir fechas nativas para formatear correctamente en Excel
-                    f_ini = pd.to_datetime(tramo["Fecha Inicio Reporte"]).to_pydatetime()
-                    f_fin = pd.to_datetime(tramo["Fecha Fin Reporte"]).to_pydatetime()
+                    # Convertir fechas nativas asegurando el formato Día/Mes/Año (dayfirst=True)
+                    f_ini = pd.to_datetime(tramo["Fecha Inicio Reporte"], dayfirst=True).to_pydatetime()
+                    f_fin = pd.to_datetime(tramo["Fecha Fin Reporte"], dayfirst=True).to_pydatetime()
                     
                     worksheet.write(current_row, 1, f_ini, fmt_date_border)
                     worksheet.write(current_row, 2, f_fin, fmt_date_border)
@@ -2198,7 +2198,8 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                     worksheet.write(current_row, 4, tramo["Dias"], fmt_int_border)
                     
                     # --- IDENTIFICACIÓN DEL ESCALÓN DE SPREAD ---
-                    fecha_inicio_tramo = pd.to_datetime(tramo["Fecha Inicio Reporte"]).normalize()
+                    # fecha_inicio_tramo = pd.to_datetime(tramo["Fecha Inicio Reporte"]).normalize()
+                    fecha_inicio_tramo = pd.to_datetime(tramo["Fecha Inicio Reporte"], dayfirst=True).normalize()
                     active_idx = 0
                     
                     if len(fechas_cambio_spread) > 0:
