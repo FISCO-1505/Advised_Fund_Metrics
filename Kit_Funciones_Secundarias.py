@@ -1951,6 +1951,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
         fmt_decimal_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         fmt_pct_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%",'align': 'right', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         fmt_pct_blue2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00000%", 'align': 'right', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        fmt_pct_blue3 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%",'align': 'center', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         
         fmt_dias_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0",'align': 'center',"bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
         fmt_pce_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
@@ -2150,7 +2151,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
             spread_MTD_pce = ((1+spread_diario)**(dias_MTD_pce)) - 1
             core_sum_MTD = rtd_MTD_pce + spread_MTD_pce
 
-            worksheet.write(last_pce_row, 3, rtd_MTD_pce, fmt_pct_blue)
+            worksheet.write(last_pce_row, 3, rtd_MTD_pce, fmt_pct_blue3)
             worksheet.write(last_pce_row, 4, dias_MTD_pce, fmt_dias_v)
             #se coloca el formato para toda la linea de spread
             for col_idx in range(n_repetir-1):
