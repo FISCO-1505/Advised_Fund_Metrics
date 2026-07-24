@@ -1930,7 +1930,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
         workbook = writer.book
         
         # --- DEFINICIÓN DE FORMATOS (Tipografía Lato y Estilos) ---
-        base_fmt = {"align": "left", "valign": "vcenter", "font_name": "Lato Light"}
+        base_fmt = {"align": "left", "valign": "vcenter", "font_name": "Calibri"}
         base_right = {**base_fmt, "align": "right"}
         base_center = {**base_fmt, "align": "center"}
    
@@ -1945,52 +1945,58 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
 
         # Formatos para datos (Números, Fechas y Porcentajes)
         fmt_date_blue = workbook.add_format({**base_center, "font_size": 11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False, "num_format": "dd/mm/yyyy"})
-        fmt_date = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy","bold":True})
-        fmt_date2 = workbook.add_format({**base_center, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy","bold":True})
-        fmt_decimal = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00","bold":True})
+        fmt_date = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy","bold":False})
+        fmt_date2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy","bold":False})
+        fmt_decimal = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00","bold":False})
         fmt_decimal_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
-        fmt_pct_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%", "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        fmt_pct_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%",'align': 'center', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         fmt_pct_blue2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00000%", "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         
-        fmt_dias_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
-        fmt_pce_n = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#FFFFFF", "font_color": "#000000", "bold": True})
+        fmt_dias_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0",'align': 'center',"bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
+        fmt_pce_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
         fmt_total_vf = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#005426", "font_color": "#FFFFFF", "bold": True})
 
-        fmt_date_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy", "bold": True, "bottom": 1})
-        fmt_date2_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy", "bold": True, "bottom": 1})
-        fmt_decimal_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00", "bold": True, "bottom": 1})
+        fmt_date_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy", "bold": False, "bottom": 1})
+        fmt_date2_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy", "bold": False, "bottom": 1})
+        fmt_decimal_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00", "bold": False, "bottom": 1})
 
         
         # Formato para datos generales de los tramos (con borde inferior muy tenue/gris)
-        fmt_data_border = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
-
+        fmt_data_border = workbook.add_format({"font_name": "Calibri",'num_format': '0.00%','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_spread_border = workbook.add_format({"font_name": "Calibri",'num_format': '0.00%','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_data_border_core = workbook.add_format({"font_name": "Calibri",'num_format': '0.00%','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3',
+                                                    "right": 2,"right_color": "#000000"})
+        
         # Formato de fechas para los tramos
-        fmt_date_border = workbook.add_format({"font_name": "Lato Light",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_date_border = workbook.add_format({"font_name": "Calibri",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3',"font_color": "#0070C0",'bold': True})
+        fmt_date_border2 = workbook.add_format({"font_name": "Calibri",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 2,'bottom_color': '#000000', "font_color": "#0070C0",'bold': True})
 
         # Formato para números enteros (Días)
-        fmt_int_border = workbook.add_format({"font_name": "Lato Light",'num_format': '#,##0','align': 'right','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_int_border = workbook.add_format({"font_name": "Calibri",'num_format': '#,##0','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
 
         # Formato para los textos descriptivos de la primera columna
-        fmt_lbl_border = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_lbl_border = workbook.add_format({"font_name": "Calibri",'align': 'left','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
+        fmt_lbl_border2 = workbook.add_format({"font_name": "Calibri",'align': 'left','valign': 'vcenter','bottom': 2,'bottom_color': '#000000',"font_color": "#000000",'bold': True})
 
-        fmt_start_table = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bold': True,'bottom': 2,'bottom_color': '#000000'})
+        fmt_start_table = workbook.add_format({"font_name": "Calibri",'align': 'left','valign': 'vcenter','bold': True,'bottom': 2,'bottom_color': '#000000'})
 
         # --- FORMATOS CON BACKGROUND COLOR PARA TOTALES ---
         # Formato de etiqueta "Total" (Azul para mantener armonía o blanco limpio)
-        fmt_total_lbl_clean = workbook.add_format({"font_name": "Lato Light",'align': 'left','valign': 'vcenter','bold': True,'top': 1,'bottom': 2,'bottom_color': '#000000'})
+        fmt_total_lbl_clean = workbook.add_format({"font_name": "Calibri",'align': 'left','valign': 'vcenter','bold': True,'top': 1,'bottom': 2,'bottom_color': '#000000'})
 
         # Formato para el Total de Rtdad PCE (Fondo Azul con letras blancas/negras)
         # Usamos color azul brillante (#00A4E4) y letra negrita
-        fmt_total_pce_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#0070C0','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+        fmt_total_pce_bg = workbook.add_format({"font_name": "Calibri",'num_format': '0.00%','align': 'center','valign': 'vcenter','bold': True,'bg_color': '#0070C0','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
 
         # Formato para el Total de Días (Fondo Verde con letras blancas/negras)
         # Usamos el verde estándar de tu cabecera (#00B050)
-        fmt_total_dias_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '#,##0','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#00B050','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+        fmt_total_dias_bg = workbook.add_format({"font_name": "Calibri",'num_format': '#,##0','align': 'center','valign': 'vcenter','bold': True,'bg_color': '#00B050','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
 
         # Formato para las columnas de spread vacías en la fila de totales (sin fondo)
-        fmt_total_spread_empty = workbook.add_format({"font_name": "Lato Light",'align': 'right','valign': 'vcenter','top': 1,'bottom': 2,'bottom_color': '#000000'})
+        fmt_total_spread_empty = workbook.add_format({"font_name": "Calibri", 'num_format': '0.00%','align': 'right','valign': 'vcenter','top': 1,'bottom': 2,'bottom_color': '#000000','bg_color': '#00B050','font_color': '#FFFFFF','bold': True})
 
-        fmt_total_pce_spread_bg = workbook.add_format({"font_name": "Lato Light",'num_format': '0.00%','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#005426','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000'})
+        fmt_total_pce_spread_bg = workbook.add_format({"font_name": "Calibri",'num_format': '0.00%','align': 'right','valign': 'vcenter','bold': True,'bg_color': '#005426','font_color': '#FFFFFF','top': 1,'bottom': 2,'bottom_color': '#000000',
+                                                       "right": 2,"right_color": "#000000"})
 
 
         for f_name in fondos_list:
@@ -2110,10 +2116,14 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
             # c. Escribir los registros históricos fila por fila
             for r_idx, row in df_filtrado.iterrows():
                 row_num = start_row + r_idx
-                excel_row = row_num + 1 
                 
                 # Obtenemos la fecha de la columna B como objeto Timestamp
                 fecha_b = row["Date"]
+                
+                # CALCULAMOS EL MES PREVIO DIRECTAMENTE EN PYTHON:
+                # 1. Le restamos 1 mes con DateOffset
+                # 2. Nos aseguramos de obtener el último día de ese mes previo (equivalente a EOMONTH con desfasamiento)
+                fecha_col_a = (fecha_b + pd.DateOffset(months=1)) + pd.offsets.MonthEnd(0)
                 
                 # Condición de diciembre (Noviembre en columna B + 1 mes de desfase = Diciembre)
                 es_diciembre_pce = (fecha_b.month == 11)
@@ -2123,8 +2133,8 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                 f_date = fmt_date_dec if es_diciembre_pce else fmt_date
                 f_decimal = fmt_decimal_dec if es_diciembre_pce else fmt_decimal
                 
-                # Escribimos en Excel (convertimos fecha_b a formato nativo de python para xlsxwriter)
-                worksheet.write_formula(row_num, 0, f"=EOMONTH(B{excel_row}, 1)", f_date2)
+                # Escribimos en Excel usando .write_datetime() o .write() pasando el datetime nativo
+                worksheet.write(row_num, 0, fecha_col_a.to_pydatetime(), f_date2)
                 worksheet.write(row_num, 1, fecha_b.to_pydatetime(), f_date)
                 
                 valor_pce = row.get("PCE CORE Index", row.get("Value"))
@@ -2142,7 +2152,11 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
 
             worksheet.write(last_pce_row, 3, rtd_MTD_pce, fmt_pct_blue)
             worksheet.write(last_pce_row, 4, dias_MTD_pce, fmt_dias_v)
-            worksheet.write(last_pce_row, 4+len(list_spread_anual), spread_MTD_pce, fmt_pce_n)
+            #se coloca el formato para toda la linea de spread
+            for col_idx in range(n_repetir-1):
+                worksheet.write(last_pce_row, 5 + col_idx, "", fmt_pce_v)
+
+            worksheet.write(last_pce_row, 4+len(list_spread_anual), spread_MTD_pce, fmt_pce_v)
             worksheet.write(last_pce_row, 5+len(list_spread_anual), core_sum_MTD, fmt_total_vf)
             worksheet.write(last_pce_row, 6+len(list_spread_anual), "MTD", values_v)
             
@@ -2180,22 +2194,34 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                 
                 info_periodo = datos_fondo[periodo]
                 tramos = info_periodo.get("Tramos", [])
+
+                #selección de formatos para totales si la longitud de los tramos es mayor a 1
+                #se estaría seleccionando el formarto correspondiente
+                format_border = fmt_lbl_border if len(tramos)>1 else fmt_lbl_border2
+                format_date = fmt_date_border if len(tramos)>1 else fmt_date_border2
+                format_pce_data = fmt_data_border if len(tramos)>1 else fmt_total_pce_bg
+                format_dias_data = fmt_int_border if len(tramos)>1 else fmt_total_dias_bg
+                format_spread = fmt_spread_border if len(tramos)>1 else fmt_total_spread_empty
+                format_core_spread = fmt_data_border_core if len(tramos)>1 else fmt_total_pce_spread_bg
+
+
+
                 totales_periodo = info_periodo.get("Totales", {}) #diccionario de los valores totales
                 if not tramos:
                     continue
                 
                 for idx, tramo in enumerate(tramos):
                     # Nombre del periodo (ej. "YTD") solo en la primera celda del tramo
-                    worksheet.write(current_row, 0, periodo if idx == 0 else "", fmt_lbl_border)
+                    worksheet.write(current_row, 0, periodo if idx == 0 else "", format_border)
                     
                     # Convertir fechas nativas asegurando el formato Día/Mes/Año (dayfirst=True)
                     f_ini = pd.to_datetime(tramo["Fecha Inicio Reporte"], dayfirst=True).to_pydatetime()
                     f_fin = pd.to_datetime(tramo["Fecha Fin Reporte"], dayfirst=True).to_pydatetime()
                     
-                    worksheet.write(current_row, 1, f_ini, fmt_date_border)
-                    worksheet.write(current_row, 2, f_fin, fmt_date_border)
-                    worksheet.write(current_row, 3, tramo["Rtdad PCE"], fmt_data_border)
-                    worksheet.write(current_row, 4, tramo["Dias"], fmt_int_border)
+                    worksheet.write(current_row, 1, f_ini, format_date)
+                    worksheet.write(current_row, 2, f_fin, format_date)
+                    worksheet.write(current_row, 3, tramo["Rtdad PCE"], format_pce_data)
+                    worksheet.write(current_row, 4, tramo["Dias"], format_dias_data)
                     
                     # --- IDENTIFICACIÓN DEL ESCALÓN DE SPREAD ---
                     # fecha_inicio_tramo = pd.to_datetime(tramo["Fecha Inicio Reporte"]).normalize()
@@ -2219,40 +2245,47 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                     for col_idx in range(n_columnas_spread):
                         col_dest = 5 + col_idx
                         if col_idx == active_idx:
-                            worksheet.write(current_row, col_dest, tramo.get("Spread Devengado", 0), fmt_data_border)
+                            worksheet.write(current_row, col_dest, tramo.get("Spread Devengado", 0), format_spread)
                         else:
-                            worksheet.write(current_row, col_dest, "", fmt_data_border) # Vacío
+                            worksheet.write(current_row, col_dest, "", format_spread) # Vacío
                     
                     # PCE+Spread en la última columna de datos del tramo
                     col_pce_spread = 5 + n_columnas_spread
                     pce_s_val = tramo.get("PCE+Spread", tramo.get("PCE+S", 0))
-                    worksheet.write(current_row, col_pce_spread, pce_s_val, fmt_data_border)
+                    worksheet.write(current_row, col_pce_spread, pce_s_val, format_core_spread)
                     
                     current_row += 1
                 
                 # --- FILA DE TOTALES (Escribiendo directamente los valores calculados) ---
-                worksheet.write(current_row, 0, f"{periodo} Total", fmt_total_lbl_clean)
-                worksheet.write(current_row, 1, "", fmt_total_lbl_clean)
-                worksheet.write(current_row, 2, "", fmt_total_lbl_clean)
-                
-                # 1. Rtdad PCE Total (Azul)
-                rtdad_pce_total = totales_periodo.get("Rtdad PCE Total", 0)
-                worksheet.write(current_row, 3, rtdad_pce_total, fmt_total_pce_bg)
-                
-                # 2. Días Totales (Verde claro)
-                dias_totales = totales_periodo.get("Dias Totales", 0)
-                worksheet.write(current_row, 4, dias_totales, fmt_total_dias_bg)
-                
-                # 3. Columnas intermedias vacías para los spreads
-                for col_idx in range(n_columnas_spread):
-                    worksheet.write(current_row, 5 + col_idx, "", fmt_total_spread_empty)
-                
-                # 4. PCE+ Spread Total (Verde oscuro)
-                col_pce_spread = 5 + n_columnas_spread
-                pce_spread_total = totales_periodo.get("PCE+Spread Total", totales_periodo.get("PCE+S Total", 0))
-                worksheet.write(current_row, col_pce_spread, pce_spread_total, fmt_total_pce_spread_bg)
-                
-                current_row += 1
+                #si la longitud de tramos es mayor a 1 se muestran los formatos de totales para
+                #la periodicidad correspondiente
+                if len(tramos)>1:
+                    worksheet.write(current_row, 0, f"{periodo} Total", fmt_total_lbl_clean)
+                    worksheet.write(current_row, 1, "", fmt_total_lbl_clean)
+                    worksheet.write(current_row, 2, "", fmt_total_lbl_clean)
+                    
+                    # 1. Rtdad PCE Total (Azul)
+                    rtdad_pce_total = totales_periodo.get("Rtdad PCE Total", 0)
+                    worksheet.write(current_row, 3, rtdad_pce_total, fmt_total_pce_bg)
+                    
+                    # 2. Días Totales (Verde claro)
+                    dias_totales = totales_periodo.get("Dias Totales", 0)
+                    worksheet.write(current_row, 4, dias_totales, fmt_total_dias_bg)
+                    
+                    # 3. Columnas intermedias vacías para los spreads
+                    for col_idx in range(n_columnas_spread):
+                        worksheet.write(current_row, 5 + col_idx, "", fmt_total_spread_empty)
+                    
+                    # 4. PCE+ Spread Total (Verde oscuro)
+                    col_pce_spread = 5 + n_columnas_spread
+                    pce_spread_total = totales_periodo.get("PCE+Spread Total", totales_periodo.get("PCE+S Total", 0))
+                    worksheet.write(current_row, col_pce_spread, pce_spread_total, fmt_total_pce_spread_bg)
+
+                # se suma un renglón dendiendo si la longitud de tramos es mayor a 1
+                if len(tramos)>1:
+                    current_row += 1
+                else:
+                    current_row = current_row
 
             
                 
