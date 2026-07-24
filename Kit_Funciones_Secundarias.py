@@ -1950,7 +1950,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
         fmt_decimal = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00","bold":False})
         fmt_decimal_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         fmt_pct_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%",'align': 'center', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
-        fmt_pct_blue2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00000%", "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
+        fmt_pct_blue2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00000%", 'align': 'right', "bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
         
         fmt_dias_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0",'align': 'center',"bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
         fmt_pce_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
