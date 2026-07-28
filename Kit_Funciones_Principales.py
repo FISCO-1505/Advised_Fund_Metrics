@@ -369,6 +369,7 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
         selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
     #Comparativa con Since Inception para el report manager
+    toggle_SI = None
     if mngr_assets_select == "Manager Assets" and mngr_stat_select == "Manager Stats":
         col1, col2, col_vacia = st.columns([.4, .6, 1], vertical_alignment="center")
         with col1:
