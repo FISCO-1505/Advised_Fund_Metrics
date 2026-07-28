@@ -7,6 +7,8 @@ import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Funciones_Principales as kit_f_principales
 from FISCO_Sources import auth, images
 
+import time
+
 def contenido_principal():
     """
     Función en donde se lleva a cabo el contenido principal de toda 
@@ -20,7 +22,7 @@ def contenido_principal():
 
     data = None
 
-#_____________
+    #_____________
     with st.sidebar:
         st.success("¡Access granted!", icon=":material/lock_open:")            
     
@@ -99,8 +101,8 @@ def contenido_principal():
                     all_stats, stats_selected, mngr_stat_select = kit_f_secundarias.stats_filter(topic)
                     stats = st.multiselect("Stats:", all_stats, default=stats_selected, label_visibility="collapsed")
 
-                    kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers, ticker_map, mngr_stat_select, mngr_assets_select)
-
+                    kit_f_principales.procesar_analisis(topic, data, selection, stats, assets_tickers, ticker_map, mngr_stat_select, mngr_assets_select, start_time)
+                    
                 elif topic == "Returns Table":
 
                     st.markdown("<h3 style='color: #1D59A9;'>Select Portfolios</h3>", unsafe_allow_html=True)
@@ -236,7 +238,8 @@ def main():
     ruta_base = Path(__file__).resolve().parent
 
     images.imagen_f("Advised Funds Metrics")
-
+    global start_time
+    start_time = time.time()
     auth.gestionar_sesion_segura(
         contenido_principal_func = contenido_principal,
         password_secreta = st.secrets["PSW_STREAMLIT"],
@@ -244,6 +247,5 @@ def main():
         timeout_segundos = 3600 #1 hora
     )
 
-        
 if __name__ == "__main__":
     main()

@@ -6,6 +6,10 @@ import numpy as np
 import Kit_Funciones_Secundarias as kit_f_secundarias
 import Kit_Metricas as kit_metricas
 
+import time
+import psutil
+import os
+
 def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,toggle_SI=None,ticker_map=None,c_d=None):
     """
     Realiza el análisis cuantitativo completo de fondos y materias primas.
@@ -349,7 +353,7 @@ def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,gr
 
     return final_portfolios, formatos
 
-def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_stat_select, mngr_assets_select):
+def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_stat_select, mngr_assets_select,start_time):
     """
     Maneja el flujo de trabajo de la UI para procesar tanto fondos como portafolios.
 
@@ -447,6 +451,43 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
                     # Generar excel
                     kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
                     st.success("You can download the Reports!")
+                else:
+                    kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
+                st.title("Medidor de Parámetros para Cloud Run")
+
+                # 2. Calcular duración exacta de la petición
+                end_time = time.time()
+                duration_seconds = end_time - start_time
+                duration_ms = duration_seconds * 1000
+        
+                # 3. Medir consumo de memoria RAM actual del proceso
+                process = psutil.Process(os.getpid())
+                memory_info = process.memory_info()
+                memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+                memory_gb = memory_mb / 1024                 # Convertir MB a GB
+        
+                # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+                st.success("¡Proceso finalizado con éxito!")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(
+                        label="Duración de la petición", 
+                        value=f"{duration_ms:.2f} ms",
+                        help="Usa este valor en la calculadora de Cloud Run (Request duration)"
+                    )
+                with col2:
+                    st.metric(
+                        label="Memoria RAM utilizada", 
+                        value=f"{memory_mb:.2f} MB",
+                        help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+                    )
+        
+                st.info(
+                    f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+                    f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+                    f"será más que suficiente para operar holgadamente."
+                )
 
             except Exception as e:
                 st.error("There's a fund with no data for this periodicity selected")
