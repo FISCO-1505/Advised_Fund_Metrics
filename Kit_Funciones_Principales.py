@@ -10,7 +10,7 @@ import time
 import psutil
 import os
 
-def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,toggle_SI=None,ticker_map=None,c_d=None):
+def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,grafico=None,toggle_SI=False,ticker_map=None,c_d=None):
     """
     Realiza el análisis cuantitativo completo de fondos y materias primas.
     
@@ -204,7 +204,7 @@ def Funds_Commodity(_data, fecha_fin, periodicity=None,stats=None,assets=None,gr
     
     return fnds_cmmdty,formatos
 
-def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,toggle_SI=None,ticker_map=None,c_d=None):
+def Portfolio(_data, fecha_fin, periodicity=None, stats=None, portfolios=None,grafico=None,toggle_SI=False,ticker_map=None,c_d=None):
     """
     Calcula el desempeño de carteras de inversión (Portfolios) basándose en nominales y precios.
 
@@ -373,6 +373,7 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
         selected_date = kit_f_secundarias.calendar(data["Prices"]["Date"], mode="single")
 
     #Comparativa con Since Inception para el report manager
+    toggle_SI = None
     if mngr_assets_select == "Manager Assets" and mngr_stat_select == "Manager Stats":
         col1, col2, col_vacia = st.columns([.4, .6, 1], vertical_alignment="center")
         with col1:
@@ -416,81 +417,82 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
         # ----------------------------
 
         with st.container():
-            try:
-                func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
-                
-                if selection == "Custom Date":
-                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map, start_date)
-                    periodo_excel=f"{start_date} to {selected_date}"
-                    fecha_excel=None
+            # try:
+            func_principal = (Funds_Commodity if topic == "Funds" else Portfolio)
+            
+            if selection == "Custom Date":
+                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map, start_date)
+                periodo_excel=f"{start_date} to {selected_date}"
+                fecha_excel=None
 
-                else:
-                    results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map)
-                    periodo_excel="SI" if selection == "Since Inception" else selection
-                    fecha_excel=selected_date
+            else:
+                results, formatos = func_principal(data, selected_date, selection, stats, assets,grafico,toggle_SI,ticker_map,start_time)
+                periodo_excel="SI" if selection == "Since Inception" else selection
+                fecha_excel=selected_date
 
-                cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
-                final_df = results[cols_to_show].loc[assets]
-                
-                #se cambia el nombre de ticker al nombre del fondo en la tabla final
-                map_names = {v: k for k, v in ticker_map.items()}
-                final_df = final_df.rename(index=map_names)
+            cols_to_show = [c for c in (stats + ['Real Date']) if c in results.columns]
+            final_df = results[cols_to_show].loc[assets]
+            
+            #se cambia el nombre de ticker al nombre del fondo en la tabla final
+            map_names = {v: k for k, v in ticker_map.items()}
+            final_df = final_df.rename(index=map_names)
 
-                st.dataframe(final_df.style.format(formatos, na_rep="-"))
-                
-                # si los assets y stats coinciden con las siguientes lsitas se mostrarán los botones para generar los reportes
-                list_mngr_fnds = ["BENIDUI Equity", "BELICUS Equity", "RWMWICU Equity", "BBSALIU Equity",
-                                "BBAGTIU Equity", "MSHRCZU Equity", "MSHZUSD Equity"]
+            st.dataframe(final_df.style.format(formatos, na_rep="-"))
+            
+            # si los assets y stats coinciden con las siguientes lsitas se mostrarán los botones para generar los reportes
+            list_mngr_fnds = ["BENIDUI Equity", "BELICUS Equity", "RWMWICU Equity", "BBSALIU Equity",
+                            "BBAGTIU Equity", "MSHRCZU Equity", "MSHZUSD Equity"]
 
-                list_mngr_stats=["Cumulative","Vol", "Sharpe Ratio","VaR",
-                                    'Treynor Ratio','Sortino Ratio','Info. Ratio',
-                                    'Tracking Error', 'Beta','Correlation',
-                                    'R^2','Max. Drawdown']
+            list_mngr_stats=["Cumulative","Vol", "Sharpe Ratio","VaR",
+                                'Treynor Ratio','Sortino Ratio','Info. Ratio',
+                                'Tracking Error', 'Beta','Correlation',
+                                'R^2','Max. Drawdown']
 
-                if topic == "Funds" and list_mngr_fnds == assets and list_mngr_stats == stats:
-                    # Generar excel
-                    kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
-                    st.success("You can download the Reports!")
-                else:
-                    kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
-                st.title("Medidor de Parámetros para Cloud Run")
+            if topic == "Funds" and list_mngr_fnds == assets and list_mngr_stats == stats:
+                # Generar excel
+                kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
+                st.success("You can download the Reports!")
+            else:
+                kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
 
-                # 2. Calcular duración exacta de la petición
-                end_time = time.time()
-                duration_seconds = end_time - start_time
-                duration_ms = duration_seconds * 1000
-        
-                # 3. Medir consumo de memoria RAM actual del proceso
-                process = psutil.Process(os.getpid())
-                memory_info = process.memory_info()
-                memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
-                memory_gb = memory_mb / 1024                 # Convertir MB a GB
-        
-                # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
-                st.success("¡Proceso finalizado con éxito!")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric(
-                        label="Duración de la petición", 
-                        value=f"{duration_ms:.2f} ms",
-                        help="Usa este valor en la calculadora de Cloud Run (Request duration)"
-                    )
-                with col2:
-                    st.metric(
-                        label="Memoria RAM utilizada", 
-                        value=f"{memory_mb:.2f} MB",
-                        help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
-                    )
-        
-                st.info(
-                    f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
-                    f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
-                    f"será más que suficiente para operar holgadamente."
+            st.title("Medidor de Parámetros para Cloud Run")
+
+            # 2. Calcular duración exacta de la petición
+            end_time = time.time()
+            duration_seconds = end_time - start_time
+            duration_ms = duration_seconds * 1000
+    
+            # 3. Medir consumo de memoria RAM actual del proceso
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+            memory_gb = memory_mb / 1024                 # Convertir MB a GB
+    
+            # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+            st.success("¡Proceso finalizado con éxito!")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric(
+                    label="Duración de la petición", 
+                    value=f"{duration_ms:.2f} ms",
+                    help="Usa este valor en la calculadora de Cloud Run (Request duration)"
                 )
+            with col2:
+                st.metric(
+                    label="Memoria RAM utilizada", 
+                    value=f"{memory_mb:.2f} MB",
+                    help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+                )
+    
+            st.info(
+                f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+                f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+                f"será más que suficiente para operar holgadamente."
+            )
 
-            except Exception as e:
-                st.error("There's a fund with no data for this periodicity selected")
+            # except Exception as e:
+            #     st.error("There's a fund with no data for this periodicity selected")
 
 def tabla_rendimientos(_data,fecha_fin,portfolio_select,ticker_map,periodicity="YTD"):
     """
