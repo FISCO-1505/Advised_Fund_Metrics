@@ -452,8 +452,6 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
                 # Generar excel
                 kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
                 st.success("You can download the Reports!")
-            else:
-                kit_f_secundarias.generar_excel_fondos(assets,results[stats],fecha_excel,periodo_excel) 
 
             st.title("Medidor de Parámetros para Cloud Run")
 
@@ -494,7 +492,7 @@ def procesar_analisis(topic, data, selection, stats, assets, ticker_map, mngr_st
             # except Exception as e:
             #     st.error("There's a fund with no data for this periodicity selected")
 
-def tabla_rendimientos(_data,fecha_fin,portfolio_select,ticker_map,periodicity="YTD"):
+def tabla_rendimientos(_data,fecha_fin,portfolio_select,ticker_map,start_time,periodicity="YTD"):
     """
     Genera reportes de rendimiento detallados y archivos Excel descargables para 
     una selección de portafolios.
@@ -680,8 +678,44 @@ def tabla_rendimientos(_data,fecha_fin,portfolio_select,ticker_map,periodicity="
                 file_name=f"Funds Rendimientos -{port[5:6]} {fecha_fin} {periodicity}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"Reporte_{port}")
+
+    st.title("Medidor de Parámetros para Cloud Run")
+    
+    # 2. Calcular duración exacta de la petición
+    end_time = time.time()
+    duration_seconds = end_time - start_time
+    duration_ms = duration_seconds * 1000
+
+    # 3. Medir consumo de memoria RAM actual del proceso
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+    memory_gb = memory_mb / 1024                 # Convertir MB a GB
+
+    # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+    st.success("¡Proceso finalizado con éxito!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            label="Duración de la petición", 
+            value=f"{duration_ms:.2f} ms",
+            help="Usa este valor en la calculadora de Cloud Run (Request duration)"
+        )
+    with col2:
+        st.metric(
+            label="Memoria RAM utilizada", 
+            value=f"{memory_mb:.2f} MB",
+            help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+        )
+
+    st.info(
+        f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+        f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+        f"será más que suficiente para operar holgadamente."
+    )
         
-def bmrk_process(_data,end_date):
+def bmrk_process(_data,end_date,start_time):
     #returns de los benchamrks
     returns_bmrk, _, _ = kit_f_secundarias.calculus_bmrk(_data)
     # Read data
@@ -707,7 +741,44 @@ def bmrk_process(_data,end_date):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         key="Reporte_bmrk")
 
-def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, ticker_map=None,c_d=None):
+    st.title("Medidor de Parámetros para Cloud Run")
+    
+    # 2. Calcular duración exacta de la petición
+    end_time = time.time()
+    duration_seconds = end_time - start_time
+    duration_ms = duration_seconds * 1000
+
+    # 3. Medir consumo de memoria RAM actual del proceso
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+    memory_gb = memory_mb / 1024                 # Convertir MB a GB
+
+    # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+    st.success("¡Proceso finalizado con éxito!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            label="Duración de la petición", 
+            value=f"{duration_ms:.2f} ms",
+            help="Usa este valor en la calculadora de Cloud Run (Request duration)"
+        )
+    with col2:
+        st.metric(
+            label="Memoria RAM utilizada", 
+            value=f"{memory_mb:.2f} MB",
+            help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+        )
+
+    st.info(
+        f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+        f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+        f"será más que suficiente para operar holgadamente."
+    )
+    
+
+def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date,start_time, ticker_map=None,c_d=None):
 
     def color_negativo_positivo(val):
         color = "#000000" if val == 0 or val=="-" else ('#28A745' if val > 0 else '#DC3545')
@@ -727,7 +798,44 @@ def monthly_returns_table(_data, fecha_fin, assets_selected, real_end_date, tick
 
     st.info(f"The final date is: {pd.to_datetime(real_end_date).strftime('%b %d, %Y')}")
 
-def PCE_Reports(_data, fecha_informe=None, entidades=None):
+    st.title("Medidor de Parámetros para Cloud Run")
+
+    # 2. Calcular duración exacta de la petición
+    end_time = time.time()
+    duration_seconds = end_time - start_time
+    duration_ms = duration_seconds * 1000
+
+    # 3. Medir consumo de memoria RAM actual del proceso
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+    memory_gb = memory_mb / 1024                 # Convertir MB a GB
+
+    # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+    st.success("¡Proceso finalizado con éxito!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            label="Duración de la petición", 
+            value=f"{duration_ms:.2f} ms",
+            help="Usa este valor en la calculadora de Cloud Run (Request duration)"
+        )
+    with col2:
+        st.metric(
+            label="Memoria RAM utilizada", 
+            value=f"{memory_mb:.2f} MB",
+            help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+        )
+
+    st.info(
+        f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+        f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+        f"será más que suficiente para operar holgadamente."
+    )
+
+
+def PCE_Reports(_data,start_time, fecha_informe=None, entidades=None):
     
     df_matrix = _data["Matrix"]
     df_PCE = _data["PCE Prices"].copy()
@@ -866,4 +974,41 @@ def PCE_Reports(_data, fecha_informe=None, entidades=None):
         fecha_fin=end_date, 
         entidades_select=entidades,
     )
+
+    st.title("Medidor de Parámetros para Cloud Run")
+    
+    # 2. Calcular duración exacta de la petición
+    end_time = time.time()
+    duration_seconds = end_time - start_time
+    duration_ms = duration_seconds * 1000
+
+    # 3. Medir consumo de memoria RAM actual del proceso
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / (1024 * 1024) # Convertir Bytes a MB
+    memory_gb = memory_mb / 1024                 # Convertir MB a GB
+
+    # 4. Mostrar resultados en pantalla para pasarlos a la calculadora
+    st.success("¡Proceso finalizado con éxito!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            label="Duración de la petición", 
+            value=f"{duration_ms:.2f} ms",
+            help="Usa este valor en la calculadora de Cloud Run (Request duration)"
+        )
+    with col2:
+        st.metric(
+            label="Memoria RAM utilizada", 
+            value=f"{memory_mb:.2f} MB",
+            help=f"Equivalente a ~{memory_gb:.4f} GiB. Úsalo para definir la memoria por instancia."
+        )
+
+    st.info(
+        f"**Consejo para la calculadora:** Si tu app consume `{memory_mb:.1f} MB` de RAM en promedio "
+        f"durante su uso, un contenedor Cloud Run con **512 MiB** o **1 GiB** de memoria "
+        f"será más que suficiente para operar holgadamente."
+    )
+    
 

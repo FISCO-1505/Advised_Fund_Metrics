@@ -138,7 +138,7 @@ def contenido_principal():
                             st.warning("⚠️ Please select at least one asset/portfolio to continue.")
                             return
                         
-                        kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers,ticker_map_funds)
+                        kit_f_principales.tabla_rendimientos(data, selected_date, assets_tickers,ticker_map_funds,start_time)
                         st.success("You can download the Reports!")
 
                 elif topic == "Monthly Returns":
@@ -158,7 +158,7 @@ def contenido_principal():
                     
                     if st.button("Load Process", key="btn_monthly_rtrn"):
                         
-                        kit_f_principales.monthly_returns_table(data, selected_date, assets, real_end_date, ticker_map, c_d=start_date)
+                        kit_f_principales.monthly_returns_table(data, selected_date, assets, real_end_date, start_time,ticker_map, c_d=start_date)
 
 
             elif data is None and selection != "Home":
@@ -177,7 +177,7 @@ def contenido_principal():
 
         submitted = st.button("Create Excel")
         if submitted:
-            kit_f_principales.bmrk_process(data,end_date)      
+            kit_f_principales.bmrk_process(data,end_date,start_time)      
             
             st.success("Done!", icon="✅")
 
@@ -219,7 +219,7 @@ def contenido_principal():
         if st.session_state.cargar_pce:
             # Ejecutamos el pipeline completo. Los botones de descarga generados aquí adentro
             # ya no desaparecerán cuando el usuario haga clic en ellos.
-            kit_f_principales.PCE_Reports(data, selected_date, entities)
+            kit_f_principales.PCE_Reports(data, start_time,selected_date, entities)
             st.success("You can download the Reports!")
 
     else:
