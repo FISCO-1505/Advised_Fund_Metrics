@@ -1859,7 +1859,17 @@ def pce_start_date(end_dt, period, inception_date=None):
         # OJO: Retornamos la fecha de inicio de operaciones EXACTA (sin MonthEnd)
         # Intentamos parsearla de manera flexible (día/mes/año o mes/año)
         return pd.to_datetime(inception_date, dayfirst=True)
-        
+
+    elif period == "Since New Strategy Inception":
+        if inception_date is None:
+            raise ValueError("Para el periodo 'Since Inception New Strategy' debes proveer una 'inception_date'.")
+                
+        return pd.to_datetime(inception_date, dayfirst=True)
+
+    elif period == "Since FA became IM":
+                    
+        return pd.to_datetime(inception_date, dayfirst=True)
+
     else:
         raise ValueError(f"Periodo '{period}' no reconocido.")
     
@@ -2186,8 +2196,11 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
             # Acceso con clave combinada exacta
             clave_combinada = f"{entidad}_{f_name}"
             datos_fondo = resultados_fondo.get(clave_combinada, {})
-            
-            periodicidades = ["YTD", "SI", "3M", "6M", "12M"]
+
+            if entidad == "BBVA":
+                periodicidades = ["YTD", "SI", "3M", "6M", "12M", "Since New Strategy Inception", "Since FA became IM"]
+            else:
+                periodicidades = ["YTD", "SI", "3M", "6M", "12M", "Since New Strategy Inception"]
             
             for periodo in periodicidades:
                 if periodo not in datos_fondo:
@@ -2290,8 +2303,8 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
 
             
                 
-            # Ajuste automático optimizado del ancho de las columnas
-            worksheet.set_column("A:A", 22)
+            # ancho de las columnas
+            worksheet.set_column("A:A", 27)
             worksheet.set_column("B:C", 17)
             worksheet.set_column("D:D", 15)
             worksheet.set_column("E:E", 18)
@@ -2327,6 +2340,14 @@ def generar_reportes_PCE(df_prices, resultados_pce, spreads_clean, fecha_fin, en
         "WHO": {
             "funds": ["A"],
             "tipo": "individual"
+        },
+        "NSF": {
+            "funds": ["A", "B"],
+            "tipo": "agrupado"
+        },
+        "WSG": {
+            "funds": ["A","B"],
+            "tipo": "agrupado"
         }
     }
     

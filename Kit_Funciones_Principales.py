@@ -695,21 +695,34 @@ def PCE_Reports(_data, fecha_informe=None, entidades=None):
     
     # Obtener los spreads por fondo
     pce_spread = kit_f_secundarias.pce_values(df_matrix)
-    
+
+    # st.dataframe(df_matrix[df_matrix["Entity"]=="MS"])
+    # st.dataframe(pce_spread)
+
     # Definir fecha final de reporte
     end_date = pd.to_datetime(fecha_informe, format="%B-%y") + pd.offsets.MonthEnd(0)
     
-    periodos = ["YTD", "SI", "3M", "6M", "12M"]
+    periodos = ["YTD", "SI", "3M", "6M", "12M", "Since New Strategy Inception", "Since FA became IM"]
     resultados_calculados = {}
 
     for fund_key, spreads_series in pce_spread.items():
         spreads_clean = {pd.to_datetime(k, dayfirst=True): v for k, v in spreads_series.items()}
         resultados_calculados[fund_key] = {}
-        
+
         # Inception real del fondo
         inception_dt = min(spreads_clean.keys())
         
         for period in periodos:
+            # Se filtra la fecha de NS y Fa cuando el periodo corresponda
+            if period == "Since New Strategy Inception":
+                inception_dt = df_matrix[(df_matrix["Entity"]==fund_key.split("_")[0]) & (df_matrix["Fund"]==fund_key.split("_")[1])]["NS Date"].unique()[0]
+
+            if period == "Since FA became IM" and fund_key.split("_")[0] == "BBVA":
+                inception_dt = df_matrix[(df_matrix["Entity"]==fund_key.split("_")[0]) & (df_matrix["Fund"]==fund_key.split("_")[1])]["FA Date"].unique()[0]
+            # else: 
+            #     # inception_dt = np.nan
+            #     next
+
             # 1. Obtener fecha de inicio del periodo para reporte
             start_date_reporte = kit_f_secundarias.pce_start_date(fecha_informe, period, inception_date=inception_dt)
             start_date_reporte = pd.to_datetime(start_date_reporte)
