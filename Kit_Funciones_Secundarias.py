@@ -2119,7 +2119,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
 
             # a. Calculamos el límite máximo permitido para la columna "Date" (1 mes antes de end_date)
             # Si end_date es Mayo, el límite para "Date" será Abril.
-            limite_fecha_b = end_date - pd.DateOffset(months=1)
+            limite_fecha_b = end_date - pd.offsets.MonthEnd(1)
 
             # b. Filtramos el DataFrame para quedarnos solo con los registros permitidos
             df_filtrado = df_prices[df_prices["Date"] <= limite_fecha_b].reset_index(drop=True)
@@ -2134,7 +2134,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                 # CALCULAMOS EL MES PREVIO DIRECTAMENTE EN PYTHON:
                 # 1. Le restamos 1 mes con DateOffset
                 # 2. Nos aseguramos de obtener el último día de ese mes previo (equivalente a EOMONTH con desfasamiento)
-                fecha_col_a = (fecha_b + pd.DateOffset(months=1)) + pd.offsets.MonthEnd(0)
+                fecha_col_a = fecha_b + pd.offsets.MonthEnd(1)
                 
                 # Condición de diciembre (Noviembre en columna B + 1 mes de desfase = Diciembre)
                 es_diciembre_pce = (fecha_b.month == 11)
@@ -2157,7 +2157,8 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
             #se insertan los datos del MTD a la altura del último precio
             spread_diario = (1+list_spread_anual.iloc[-1])**(1/365)-1
             rtd_MTD_pce = (df_filtrado["PCE CORE Index"].iloc[-1]/df_filtrado["PCE CORE Index"].iloc[-2] - 1)
-            dias_MTD_pce = (df_filtrado["Date"].iloc[-2] - df_filtrado["Date"].iloc[-3]).days
+            next_month = df_filtrado["Date"].iloc[-1]  + pd.offsets.MonthEnd(1)
+            dias_MTD_pce = (next_month - df_filtrado["Date"].iloc[-1]).days
             spread_MTD_pce = ((1+spread_diario)**(dias_MTD_pce)) - 1
             core_sum_MTD = rtd_MTD_pce + spread_MTD_pce
 

@@ -739,6 +739,10 @@ def PCE_Reports(_data, fecha_informe=None, entidades=None):
                 # --- Aplicación de desfases para PCE ---
                 if period == "SI" and i == 0:
                     pce_date_start = t_start - pd.DateOffset(months=2) + pd.offsets.MonthEnd(0)
+
+                elif period == "Since FA became IM" and i == 0 and fund_key.split("_")[0] == "BBVA":
+                    pce_date_start = t_start - pd.DateOffset(months=2) + pd.offsets.MonthEnd(0)
+
                 else:
                     pce_date_start = t_start - pd.DateOffset(months=1) + pd.offsets.MonthEnd(0)
                 
@@ -759,7 +763,9 @@ def PCE_Reports(_data, fecha_informe=None, entidades=None):
                 num_dias = (t_end - t_start).days
                 
                 # --- Cálculo del Spread Devengado Compuesto (Fórmula corregida) ---
-                spread_devengado = ((1.0 + spread_anual) ** (num_dias / 365.0)) - 1.0
+                # spread_devengado = ((1.0 + spread_anual) ** (num_dias / 365.0)) - 1.0
+                spread_diario = ((1 + spread_anual) ** (1 / 365)) - 1
+                spread_devengado = ((1 + spread_diario) ** (num_dias)) - 1
                 
                 # --- PCE + Spread ---
                 pce_plus_spread = rtdad_pce + spread_devengado
