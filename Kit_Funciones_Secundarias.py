@@ -1955,7 +1955,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
 
         # Formatos para datos (Números, Fechas y Porcentajes)
         fmt_date_blue = workbook.add_format({**base_center, "font_size": 11,"bg_color":"#FFFFFF", "font_color":"#0070C0", "bold":False, "num_format": "dd/mm/yyyy"})
-        fmt_date = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy","bold":False})
+        fmt_date = workbook.add_format({**base_center, "font_size": 11, "num_format": "mm/dd/yyyy","bold":False})
         fmt_date2 = workbook.add_format({**base_right, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy","bold":False})
         fmt_decimal = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00","bold":False})
         fmt_decimal_blue = workbook.add_format({**base_right, "font_size": 11, "num_format": "0","bg_color": "#0070C0", "font_color": "#FFFFFF", "bold": True})
@@ -1967,7 +1967,7 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
         fmt_pce_v = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#00B050", "font_color": "#FFFFFF", "bold": True})
         fmt_total_vf = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00%","bg_color": "#005426", "font_color": "#FFFFFF", "bold": True})
 
-        fmt_date_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "dd/mm/yyyy", "bold": False, "bottom": 1})
+        fmt_date_dec = workbook.add_format({**base_center, "font_size": 11, "num_format": "mm/dd/yyyy", "bold": False, "bottom": 1})
         fmt_date2_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "[$-es-ES]mmmm-yy", "bold": False, "bottom": 1})
         fmt_decimal_dec = workbook.add_format({**base_right, "font_size": 11, "num_format": "0.00", "bold": False, "bottom": 1})
 
@@ -1979,8 +1979,8 @@ def excel_pce_format(df_prices, resultados_fondo, entidad, fondos_list, spreads_
                                                     "right": 2,"right_color": "#000000"})
         
         # Formato de fechas para los tramos
-        fmt_date_border = workbook.add_format({"font_name": "Calibri",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3',"font_color": "#0070C0",'bold': True})
-        fmt_date_border2 = workbook.add_format({"font_name": "Calibri",'num_format': 'dd/mm/yyyy','align': 'center','valign': 'vcenter','bottom': 2,'bottom_color': '#000000', "font_color": "#0070C0",'bold': True})
+        fmt_date_border = workbook.add_format({"font_name": "Calibri",'num_format': 'mm/dd/yyyy','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3',"font_color": "#0070C0",'bold': True})
+        fmt_date_border2 = workbook.add_format({"font_name": "Calibri",'num_format': 'mm/dd/yyyy','align': 'center','valign': 'vcenter','bottom': 2,'bottom_color': '#000000', "font_color": "#0070C0",'bold': True})
 
         # Formato para números enteros (Días)
         fmt_int_border = workbook.add_format({"font_name": "Calibri",'num_format': '#,##0','align': 'center','valign': 'vcenter','bottom': 1,'bottom_color': '#D3D3D3'})
