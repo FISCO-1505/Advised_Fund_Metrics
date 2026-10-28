@@ -62,7 +62,7 @@ token = st.secrets["GITHUB_TOKEN"]
 organization = "FinaccessX"
 repo_url = (
     f"git+https://x-access-token:{quote(token, safe='')}"
-    f"@github.com/{organization}/Resources.git"
+    f"@github.com/{organization}/Finaccess_Resources.git"
 )
 
 # Use your existing local_lib_path variable
